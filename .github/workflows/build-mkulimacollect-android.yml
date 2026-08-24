@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -49,7 +51,7 @@ jobs:
 
       - name: Generate Android project
         working-directory: apps/collect
-        run: npx expo prebuild --platform android --non-interactive
+        run: npx expo prebuild --platform android
 
       - name: Build debug APK
         working-directory: apps/collect/android
