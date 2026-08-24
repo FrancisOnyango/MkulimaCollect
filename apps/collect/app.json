@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "MkulimaCollect",
+    "slug": "mkulimacollect",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "mkulimacollect",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/images/icon.png",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.mkulimascore.collect"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#1A5C35"
+      },
+      "package": "com.mkulimascore.collect",
+      "versionCode": 1,
+      "allowBackup": false,
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-location",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MkulimaCollect needs camera access to capture farmer ID documents and farm evidence photos."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MkulimaCollect needs access to your photos to attach evidence documents."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26,
+            "targetSdkVersion": 35
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --color-brand: #1A5C35;
+  --color-brand-dark: #0F3D22;
+  --color-brand-mid: #246B40;
+  --color-brand-light: #E8F4EC;
+  --color-brand-muted: #F4F8F5;
+  --color-surface: #FAFAFA;
+  --color-charcoal: #1C1C1E;
+  --color-charcoal-700: #3A3A3C;
+  --color-charcoal-500: #636366;
+  --color-charcoal-300: #AEAEB2;
+  --color-charcoal-100: #E5E5EA;
+  --color-charcoal-50: #F2F2F7;
+  --color-amber-field: #B45309;
+  --color-amber-bg: #FEF3C7;
+  --color-red-field: #B91C1C;
+  --color-red-bg: #FEE2E2;
+  --font-sans: 'Instrument Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+body {
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  background: #1C1C1E;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-mono {
+  font-family: 'DM Mono', monospace;
+}
+
+/* Hide scrollbar but keep scrollability */
+.scroll-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth transitions */
+.screen-enter {
+  animation: slideUp 0.22s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Map background simulation */
+.map-bg {
+  background-color: #C8D9B8;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+    radial-gradient(ellipse at 30% 40%, rgba(139,167,109,0.4) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 60%, rgba(101,135,79,0.3) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 20%, rgba(160,185,130,0.35) 0%, transparent 35%);
+  background-size: 20px 20px, 20px 20px, 100% 100%, 100% 100%, 100% 100%;
+}
+
+/* Pulse animation for sync */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Uploading animation */
+@keyframes uploading {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
