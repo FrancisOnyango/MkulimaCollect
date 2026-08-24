@@ -82,6 +82,9 @@ export type SyncBatch = {
     operationUuid: string;
     entityType: string;
     mutationType: string;
+    localEntityId?: string;
+    dependsOn?: string[];
+    serverBaseline?: number | null;
     payload: Record<string, unknown>;
   }[];
 };

@@ -1,0 +1,486 @@
+openapi: 3.1.0
+info:
+  title: MkulimaScore Mobile Ingestion API
+  version: 0.1.0
+  description: Staging-first contract for MkulimaCollect offline sync into the MkulimaScore ingestion boundary.
+servers:
+  - url: https://staging.api.mkulimascore.com/api/v1
+    description: Staging
+  - url: https://api.mkulimascore.com/api/v1
+    description: Production, disabled until approved rollout
+security:
+  - bearerAuth: []
+paths:
+  /mobile/bootstrap:
+    post:
+      tags: [mobile]
+      summary: Bootstrap mobile configuration
+      operationId: mobileBootstrap
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MobileBootstrapRequest"
+      responses:
+        "200":
+          description: Mobile bootstrap configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileBootstrapResponse"
+  /mobile/assignments:
+    get:
+      tags: [mobile]
+      summary: List field assignments for the authenticated field officer
+      operationId: listMobileAssignments
+      parameters:
+        - $ref: "#/components/parameters/SinceCursor"
+      responses:
+        "200":
+          description: Field assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MobileAssignment"
+  /mobile/tasks:
+    get:
+      tags: [mobile]
+      summary: List granular field tasks for the authenticated field officer
+      operationId: listMobileTasks
+      parameters:
+        - $ref: "#/components/parameters/SinceCursor"
+      responses:
+        "200":
+          description: Field tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MobileTask"
+  /mobile/sync:
+    post:
+      tags: [mobile]
+      summary: Submit offline mobile changes into the ingestion boundary
+      operationId: submitMobileSync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MobileSyncRequest"
+      responses:
+        "200":
+          description: Per-change ingestion acknowledgement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileSyncResponse"
+        "409":
+          description: Whole-batch conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileSyncResponse"
+  /mobile/evidence/upload-authorization:
+    post:
+      tags: [mobile]
+      summary: Authorize a private evidence upload
+      operationId: authorizeMobileEvidenceUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceUploadAuthorizationRequest"
+      responses:
+        "200":
+          description: Short-lived upload authorization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceUploadAuthorizationResponse"
+  /mobile/evidence/{evidence_id}/finalize:
+    post:
+      tags: [mobile]
+      summary: Finalize an evidence upload after S3 transfer
+      operationId: finalizeMobileEvidenceUpload
+      parameters:
+        - name: evidence_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceFinalizeRequest"
+      responses:
+        "200":
+          description: Evidence receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceFinalizeResponse"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    SinceCursor:
+      name: since
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Opaque sync cursor or timestamp from the previous response.
+  schemas:
+    MobileBootstrapRequest:
+      type: object
+      required: [agent_id, device_id, app_version]
+      properties:
+        agent_id:
+          type: string
+        device_id:
+          type: string
+        app_version:
+          type: string
+        last_cursor:
+          type: [string, "null"]
+    MobileBootstrapResponse:
+      type: object
+      required: [server_time, min_supported_version, consent_version, enabled_sectors, schema_versions, sync_cursor]
+      properties:
+        server_time:
+          type: string
+          format: date-time
+        min_supported_version:
+          type: string
+        consent_version:
+          type: string
+        sync_cursor:
+          type: string
+        current_user:
+          $ref: "#/components/schemas/MobileUser"
+        institution:
+          $ref: "#/components/schemas/MobileInstitution"
+        permissions:
+          type: array
+          items:
+            type: string
+        enabled_sectors:
+          type: array
+          items:
+            type: string
+        schema_versions:
+          type: object
+          additionalProperties:
+            type: string
+        validation_rules:
+          type: object
+        lookup_lists:
+          type: object
+        supported_evidence_types:
+          type: array
+          items:
+            type: string
+    MobileUser:
+      type: object
+      required: [id, email]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: [string, "null"]
+        role:
+          type: [string, "null"]
+    MobileInstitution:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        ecosystem_id:
+          type: [string, "null"]
+    MobileAssignment:
+      type: object
+      required: [id, type, status, updated_at]
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/AssignmentType"
+        farmer_msid:
+          type: [string, "null"]
+        geography:
+          type: object
+        cooperative_id:
+          type: [string, "null"]
+        priority:
+          $ref: "#/components/schemas/Priority"
+        required_sections:
+          type: array
+          items:
+            type: string
+        due_at:
+          type: [string, "null"]
+          format: date-time
+        status:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+    MobileTask:
+      type: object
+      required: [task_id, type, priority, required_sections]
+      properties:
+        task_id:
+          type: string
+        type:
+          $ref: "#/components/schemas/AssignmentType"
+        farmer_msid:
+          type: [string, "null"]
+        priority:
+          $ref: "#/components/schemas/Priority"
+        required_sections:
+          type: array
+          items:
+            type: string
+        due_at:
+          type: [string, "null"]
+          format: date-time
+        completion_status:
+          type: [string, "null"]
+        supervisor_review_status:
+          type: [string, "null"]
+    MobileSyncRequest:
+      type: object
+      required: [device_id, sync_batch_id, client_time, changes]
+      properties:
+        device_id:
+          type: string
+        sync_batch_id:
+          type: string
+        client_time:
+          type: string
+          format: date-time
+        baseline_cursor:
+          type: [string, "null"]
+        changes:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/MobileSyncChange"
+    MobileSyncChange:
+      type: object
+      required: [local_id, entity_type, operation, idempotency_key, depends_on, payload]
+      properties:
+        local_id:
+          type: string
+        operation_id:
+          type: [string, "null"]
+        entity_type:
+          $ref: "#/components/schemas/MobileEntityType"
+        operation:
+          type: string
+          enum: [upsert, delete]
+        idempotency_key:
+          type: string
+        depends_on:
+          type: array
+          items:
+            type: string
+        baseline_version:
+          type: [integer, "null"]
+        schema_version:
+          type: [string, "null"]
+        captured_at:
+          type: [string, "null"]
+          format: date-time
+        gps:
+          $ref: "#/components/schemas/GpsPoint"
+        payload:
+          type: object
+    MobileSyncResponse:
+      type: object
+      required: [sync_batch_id, status, server_cursor, results, rejected, conflicts]
+      properties:
+        sync_batch_id:
+          type: string
+        status:
+          type: string
+          enum: [accepted, partial, rejected]
+        server_cursor:
+          type: string
+        correlation_id:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/MobileSyncResult"
+        rejected:
+          type: array
+          items:
+            $ref: "#/components/schemas/MobileSyncIssue"
+        conflicts:
+          type: array
+          items:
+            $ref: "#/components/schemas/MobileSyncIssue"
+    MobileSyncResult:
+      type: object
+      required: [local_id, status, warnings]
+      properties:
+        local_id:
+          type: string
+        operation_id:
+          type: [string, "null"]
+        server_entity_id:
+          type: [string, "null"]
+        status:
+          type: string
+          enum: [received, accepted, processing, needs_correction, needs_review, conflict, rejected, ingested, canonicalized]
+        server_version:
+          type: [integer, "null"]
+        warnings:
+          type: array
+          items:
+            type: string
+    MobileSyncIssue:
+      type: object
+      required: [code, message]
+      properties:
+        local_id:
+          type: [string, "null"]
+        operation_id:
+          type: [string, "null"]
+        code:
+          type: string
+        message:
+          type: string
+        fields:
+          type: array
+          items:
+            type: string
+    EvidenceUploadAuthorizationRequest:
+      type: object
+      required: [entity_type, local_entity_id, evidence_type, mime_type, file_size_bytes, sha256]
+      properties:
+        entity_type:
+          type: string
+        local_entity_id:
+          type: string
+        evidence_type:
+          $ref: "#/components/schemas/EvidenceType"
+        mime_type:
+          type: string
+        file_size_bytes:
+          type: integer
+          minimum: 1
+        sha256:
+          type: string
+        captured_at:
+          type: [string, "null"]
+          format: date-time
+        gps:
+          $ref: "#/components/schemas/GpsPoint"
+    EvidenceUploadAuthorizationResponse:
+      type: object
+      required: [evidence_id, upload_url, expires_at, required_headers]
+      properties:
+        evidence_id:
+          type: string
+        upload_url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+        required_headers:
+          type: object
+          additionalProperties:
+            type: string
+    EvidenceFinalizeRequest:
+      type: object
+      required: [upload_completed]
+      properties:
+        upload_completed:
+          type: boolean
+        captured_at:
+          type: [string, "null"]
+          format: date-time
+        gps:
+          $ref: "#/components/schemas/GpsPoint"
+        etag:
+          type: [string, "null"]
+    EvidenceFinalizeResponse:
+      type: object
+      required: [evidence_id, status]
+      properties:
+        evidence_id:
+          type: string
+        status:
+          type: string
+          enum: [received, validating, processing, accepted, needs_review, rejected]
+        message:
+          type: [string, "null"]
+    GpsPoint:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        accuracy_m:
+          type: [number, "null"]
+    AssignmentType:
+      type: string
+      enum:
+        - new_farmer_onboarding
+        - profile_completion
+        - farm_verification
+        - sacco_membership_verification
+        - production_update
+        - geo_refresh
+        - loan_monitoring_visit
+        - evidence_recheck
+        - consent_refresh
+    Priority:
+      type: string
+      enum: [low, normal, high]
+    MobileEntityType:
+      type: string
+      enum:
+        - farmer_profile_draft
+        - identity_record
+        - farm_record
+        - farm_geometry
+        - enterprise_record
+        - sacco_membership
+        - buyer_relationship
+        - consent_record
+        - production_observation
+        - expense_record
+        - monitoring_visit
+        - evidence_record
+    EvidenceType:
+      type: string
+      enum:
+        - national_id_photo
+        - farm_photo
+        - livestock_photo
+        - crop_photo
+        - sacco_document
+        - consent_form
+        - buyer_delivery_record
+        - other_supporting_evidence

@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { Colors } from "@/constants/colors";
+import { useApiClient } from "@/components/providers/APIProvider";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { completeTask, getTasksForAgent } from "@/features/tasks/taskRepository";
+import { completeTask, getTasksForAgent, type UpsertTaskInput, upsertTask } from "@/features/tasks/taskRepository";
 import { type tasks } from "@/lib/db/schema";
 
 type TaskRow = typeof tasks.$inferSelect;
 
 export default function TasksScreen() {
   const db = useDatabase();
+  const { api } = useApiClient();
   const { agent } = useAuth();
   const [items, setItems] = useState<TaskRow[]>([]);
 
@@ -22,9 +24,43 @@ export default function TasksScreen() {
     setItems(await getTasksForAgent(db, agent.id));
   }, [agent, db]);
 
+  const hydrateFromApi = useCallback(async () => {
+    if (!agent) {
+      return;
+    }
+
+    const remoteTasks = await api.getTasks(agent.id);
+    await Promise.all(
+      remoteTasks.map((task) => {
+        const input: UpsertTaskInput = {
+          id: task.id,
+          agentId: agent.id,
+          type: task.type,
+          priority: task.priority,
+          status: "OPEN",
+          title: task.title,
+        };
+
+        if (task.farmerId) {
+          input.farmerId = task.farmerId;
+        }
+        if (task.detail) {
+          input.detail = task.detail;
+        }
+        if (task.dueDate) {
+          input.dueDate = task.dueDate;
+        }
+
+        return upsertTask(db, input);
+      }),
+    );
+  }, [agent, api, db]);
+
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void hydrateFromApi().finally(() => {
+      void refresh();
+    });
+  }, [hydrateFromApi, refresh]);
 
   async function handleDone(taskId: string) {
     if (!agent) {
