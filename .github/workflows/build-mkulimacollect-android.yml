@@ -41,7 +41,7 @@ jobs:
 
       - name: Install app dependencies
         working-directory: apps/collect
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Typecheck
         working-directory: apps/collect
