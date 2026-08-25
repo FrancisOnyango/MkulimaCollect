@@ -33,14 +33,20 @@ export default function App() {
     setScreen({ id: "main", tab: t || tab })
   }
 
+  const statusLabel = isOffline ? "Offline-safe mode" : "Connected • 17 queued"
+
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.14),_transparent_32%),linear-gradient(180deg,_#131a1a_0%,_#0a1112_100%)] p-4">
+      <div className="absolute inset-x-0 top-6 mx-auto w-[220px] rounded-full border border-white/10 bg-white/5 px-4 py-2 text-center text-[10px] font-medium uppercase tracking-[0.32em] text-white/70 backdrop-blur-md">
+        MkulimaCollect • {statusLabel}
+      </div>
+
       {/* Phone shell */}
       <div
         role="application"
         aria-label="MkulimaCollect mobile preview"
         tabIndex={0}
-        className="relative flex flex-col overflow-hidden bg-[#F7F9F7] border border-white/10"
+        className="relative mt-8 flex flex-col overflow-hidden bg-[#F7F9F7] border border-white/10"
         style={{ width: 390, height: 844, borderRadius: 44, boxShadow: "0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)" }}
       >
         {/* Notch */}
