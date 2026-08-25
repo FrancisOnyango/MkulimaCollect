@@ -1,0 +1,27 @@
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    services: {}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npm run install:browsers
+      - name: Start dev server
+        run: npm run dev &
+      - name: Wait for server
+        run: npx wait-on http://localhost:5173
+      - name: Run Playwright tests
+        run: npm run test:e2e

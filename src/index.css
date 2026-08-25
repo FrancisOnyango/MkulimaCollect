@@ -22,11 +22,25 @@
   --font-mono: 'DM Mono', monospace;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  min-height: 100%;
+  height: 100%;
+}
+
 body {
   font-family: 'Instrument Sans', system-ui, sans-serif;
-  background: #1C1C1E;
+  background: radial-gradient(circle at top, #2d3b2f 0%, #1d2124 35%, #121416 100%);
   margin: 0;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button, input, select {
+  font: inherit;
 }
 
 .font-mono {
@@ -44,12 +58,21 @@ body {
 
 /* Smooth transitions */
 .screen-enter {
-  animation: slideUp 0.22s ease-out;
+  animation: slideUp 0.26s cubic-bezier(0.2, 0.7, 0.1, 1);
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(14px) scale(0.995); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Map background simulation */
@@ -77,4 +100,18 @@ body {
 @keyframes uploading {
   0% { width: 0%; }
   100% { width: 100%; }
+}
+
+/* Focus styles for accessibility */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 3px solid rgba(34,197,94,0.9);
+  outline-offset: 3px;
+}
+
+button:focus-visible,
+[arole='button']:focus-visible {
+  box-shadow: 0 0 0 4px rgba(34,197,94,0.08);
 }

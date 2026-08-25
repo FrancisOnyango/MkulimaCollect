@@ -4,6 +4,7 @@ import { SyncState, type SyncStateValue } from "@/constants/syncStates";
 import type { AppDatabase } from "@/lib/db/database";
 import { syncOutbox } from "@/lib/db/schema";
 import type { CreateOutboxEntryInput, SyncOutboxEntry } from "./types";
+import { recordMetric } from "@/metrics";
 
 type OutboxWriter = {
   insert: AppDatabase["insert"];
@@ -36,6 +37,8 @@ export function buildOutboxRow(input: CreateOutboxEntryInput) {
 
 export async function enqueueOutboxEntry(writer: OutboxWriter, input: CreateOutboxEntryInput): Promise<string> {
   const row = buildOutboxRow(input);
+  Sentry.addBreadcrumb({ category: 'sync', message: `enqueue ${row.entryUuid}`, data: { entityType: row.entityType, entityId: row.entityId } });
+  recordMetric('outbox.enqueue', 1, { entity: row.entityType });
   await writer.insert(syncOutbox).values(row);
   return row.operationUuid;
 }
@@ -66,10 +69,14 @@ export async function markSynced(db: AppDatabase, entryUuid: string, syncedAt = 
   await db.update(syncOutbox).set({ state: SyncState.SYNCED, syncedAt, lastError: null, nextRetryAt: null }).where(eq(syncOutbox.entryUuid, entryUuid));
 }
 
+import * as Sentry from "@sentry/react";
+
 export async function markRetry(db: AppDatabase, entryUuid: string, nextRetryCount: number, error: string): Promise<void> {
   const fallbackDelayMs = retryBackoffMs[retryBackoffMs.length - 1] ?? 3_600_000;
   const delayMs = retryBackoffMs[Math.min(nextRetryCount - 1, retryBackoffMs.length - 1)] ?? fallbackDelayMs;
   const failed = nextRetryCount >= 10;
+
+  Sentry.addBreadcrumb({ category: 'sync', message: `mark-retry ${entryUuid}`, data: { retryCount: nextRetryCount, error } });
 
   await db
     .update(syncOutbox)

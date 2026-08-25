@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { Colors } from "@/constants/colors";
+import { ChoiceGroup, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader, TextField } from "@/components/ui/FormKit";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { createFarm } from "@/features/farms/farmRepository";
+
+const tenureOptions = ["OWNED", "LEASED", "FAMILY_LAND", "COMMUNAL", "OTHER"] as const;
 
 export default function FarmStep() {
   const db = useDatabase();
@@ -12,7 +13,10 @@ export default function FarmStep() {
   const dependsOn = params.dependsOn ? [params.dependsOn] : [];
   const [name, setName] = useState("Main farm");
   const [village, setVillage] = useState("");
+  const [ward, setWard] = useState("");
+  const [county, setCounty] = useState("");
   const [size, setSize] = useState("");
+  const [tenure, setTenure] = useState<(typeof tenureOptions)[number]>("OWNED");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,17 +26,29 @@ export default function FarmStep() {
       return;
     }
 
+    if (!name.trim() || !village.trim()) {
+      setError("Farm name and village are required.");
+      return;
+    }
+
+    const parsedSize = Number(size);
+    if (size.trim() && (!Number.isFinite(parsedSize) || parsedSize <= 0)) {
+      setError("Reported acreage must be a positive number.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
     try {
-      const parsedSize = Number(size);
       const { farmId, operationUuid } = await createFarm(db, {
         farmerId,
-        name,
-        village,
-        tenure: "OWNED",
-        ...(Number.isFinite(parsedSize) && size ? { sizeReportedAcres: parsedSize, sizeReportedSource: "FARMER_REPORTED" } : {}),
+        name: name.trim(),
+        village: village.trim(),
+        ward: ward.trim() || undefined,
+        county: county.trim() || undefined,
+        tenure,
+        ...(Number.isFinite(parsedSize) && size.trim() ? { sizeReportedAcres: parsedSize, sizeReportedSource: "FARMER_REPORTED" } : {}),
         dependsOn,
       });
 
@@ -45,36 +61,28 @@ export default function FarmStep() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.surface, padding: 24, justifyContent: "center" }}>
-      <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>Farm</Text>
-      <TextInput placeholder="Farm name" value={name} onChangeText={setName} style={inputStyle} />
-      <TextInput placeholder="Village" value={village} onChangeText={setVillage} style={inputStyle} />
-      <TextInput placeholder="Reported size in acres" value={size} onChangeText={setSize} keyboardType="decimal-pad" style={inputStyle} />
-      {error ? <Text style={{ color: Colors.redField, marginTop: 14 }}>{error}</Text> : null}
-      <Pressable accessibilityRole="button" disabled={saving} onPress={handleContinue} style={buttonStyle(saving)}>
-        {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "700" }}>Continue</Text>}
-      </Pressable>
-    </View>
+    <FormScreen footer={<PrimaryButton label="Continue to enterprise" loading={saving} onPress={handleContinue} />}>
+      <StepHeader
+        eyebrow="Farm profile"
+        title="Land and location"
+        description="Create the farm record that anchors sector enterprises, GPS boundary capture, evidence, and production history."
+        step={4}
+        total={8}
+      />
+
+      <SectionCard title="Farm identity" description="Use names the farmer and local institution will recognize during later review.">
+        <TextField label="Farm name" required value={name} onChangeText={setName} placeholder="Main farm" />
+        <ChoiceGroup label="Tenure" value={tenure} options={tenureOptions} onChange={(value) => setTenure(value as (typeof tenureOptions)[number])} required />
+      </SectionCard>
+
+      <SectionCard title="Location details" description="GPS boundary capture can be done later; this section records the human-readable location immediately.">
+        <TextField label="Village or estate" required value={village} onChangeText={setVillage} placeholder="Village" />
+        <TextField label="Ward or sub-location" value={ward} onChangeText={setWard} placeholder="Optional" />
+        <TextField label="County" value={county} onChangeText={setCounty} placeholder="Optional" />
+        <TextField label="Reported size" value={size} onChangeText={setSize} keyboardType="decimal-pad" placeholder="Acres" helper="Farmer-reported acreage is stored with its source. GPS measured area can be captured separately." />
+      </SectionCard>
+
+      {error ? <Notice title={error} tone="danger" /> : null}
+    </FormScreen>
   );
-}
-
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: Colors.charcoal100,
-  borderRadius: 10,
-  paddingHorizontal: 14,
-  paddingVertical: 12,
-  color: Colors.charcoal,
-  backgroundColor: "white",
-  marginTop: 14,
-};
-
-function buttonStyle(disabled: boolean) {
-  return {
-    alignItems: "center" as const,
-    borderRadius: 12,
-    backgroundColor: disabled ? Colors.charcoal300 : Colors.brand,
-    paddingVertical: 14,
-    marginTop: 24,
-  };
 }

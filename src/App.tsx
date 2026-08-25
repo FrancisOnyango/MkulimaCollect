@@ -37,7 +37,10 @@ export default function App() {
     <div className="min-h-screen flex items-center justify-center">
       {/* Phone shell */}
       <div
-        className="relative flex flex-col overflow-hidden bg-surface"
+        role="application"
+        aria-label="MkulimaCollect mobile preview"
+        tabIndex={0}
+        className="relative flex flex-col overflow-hidden bg-[#F7F9F7] border border-white/10"
         style={{ width: 390, height: 844, borderRadius: 44, boxShadow: "0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)" }}
       >
         {/* Notch */}

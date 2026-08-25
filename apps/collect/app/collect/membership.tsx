@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { Colors } from "@/constants/colors";
+import { ChoiceGroup, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader, TextField, ToggleRow } from "@/components/ui/FormKit";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { getPrimaryAffiliationByFarmer, saveAffiliation, type SaveAffiliationInput } from "@/features/affiliations/affiliationRepository";
+
+const institutionTypes = ["COOPERATIVE", "SACCO", "AGGREGATOR", "BUYER", "FARMER_GROUP", "NONE"] as const;
 
 export default function MembershipStep() {
   const db = useDatabase();
   const params = useLocalSearchParams<{ farmerId?: string; dependsOn?: string }>();
   const [organizationName, setOrganizationName] = useState("");
-  const [institutionType, setInstitutionType] = useState("COOPERATIVE");
+  const [institutionType, setInstitutionType] = useState<(typeof institutionTypes)[number]>("COOPERATIVE");
   const [memberNumber, setMemberNumber] = useState("");
   const [branch, setBranch] = useState("");
   const [membershipStart, setMembershipStart] = useState("");
@@ -29,7 +30,7 @@ export default function MembershipStep() {
       }
 
       setOrganizationName(affiliation.organizationName);
-      setInstitutionType(affiliation.institutionType);
+      setInstitutionType(institutionTypes.includes(affiliation.institutionType as (typeof institutionTypes)[number]) ? (affiliation.institutionType as (typeof institutionTypes)[number]) : "COOPERATIVE");
       setMemberNumber(affiliation.memberNumber ?? "");
       setBranch(affiliation.branch ?? "");
       setMembershipStart(affiliation.membershipStart ?? "");
@@ -44,8 +45,8 @@ export default function MembershipStep() {
       return;
     }
 
-    if (!organizationName.trim()) {
-      setError("Enter the cooperative, SACCO, or institution name.");
+    if (institutionType !== "NONE" && !organizationName.trim()) {
+      setError("Enter the cooperative, SACCO, buyer, or institution name.");
       return;
     }
 
@@ -55,9 +56,9 @@ export default function MembershipStep() {
     try {
       const input: SaveAffiliationInput = {
         farmerId: params.farmerId,
-        organizationName: organizationName.trim(),
+        organizationName: institutionType === "NONE" ? "No formal affiliation" : organizationName.trim(),
         institutionType,
-        active,
+        active: institutionType === "NONE" ? false : active,
         dependsOn: params.dependsOn ? [params.dependsOn] : [],
       };
 
@@ -88,44 +89,29 @@ export default function MembershipStep() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: Colors.surface }} contentContainerStyle={{ padding: 24 }}>
-      <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>Membership</Text>
-      <Text style={{ color: Colors.charcoal500, marginTop: 8 }}>Record cooperative, SACCO, or institutional affiliation for this farmer.</Text>
-      <TextInput placeholder="Organization name" value={organizationName} onChangeText={setOrganizationName} style={inputStyle} />
-      <TextInput placeholder="Institution type" value={institutionType} onChangeText={setInstitutionType} style={inputStyle} />
-      <TextInput placeholder="Member number" value={memberNumber} onChangeText={setMemberNumber} style={inputStyle} />
-      <TextInput placeholder="Branch" value={branch} onChangeText={setBranch} style={inputStyle} />
-      <TextInput placeholder="Membership start date" value={membershipStart} onChangeText={setMembershipStart} style={inputStyle} />
-      <TextInput placeholder="Collection centre" value={collectionCentre} onChangeText={setCollectionCentre} style={inputStyle} />
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
-        <Text style={{ color: Colors.charcoal, fontWeight: "700" }}>Active membership</Text>
-        <Switch value={active} onValueChange={setActive} />
-      </View>
-      {error ? <Text style={{ color: Colors.redField, marginTop: 14 }}>{error}</Text> : null}
-      <Pressable accessibilityRole="button" disabled={saving} onPress={handleContinue} style={buttonStyle(saving)}>
-        {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "700" }}>Continue</Text>}
-      </Pressable>
-    </ScrollView>
+    <FormScreen footer={<PrimaryButton label="Continue to farm profile" loading={saving} onPress={handleContinue} />}>
+      <StepHeader
+        eyebrow="Institutional link"
+        title="Membership and market access"
+        description="Capture the organization that can corroborate farmer activity, deliveries, statements, and payment history."
+        step={3}
+        total={8}
+      />
+
+      <SectionCard title="Affiliation type" description="Choose the strongest active relationship. If the farmer has none, select NONE and continue.">
+        <ChoiceGroup label="Institution type" value={institutionType} options={institutionTypes} onChange={(value) => setInstitutionType(value as (typeof institutionTypes)[number])} required />
+      </SectionCard>
+
+      <SectionCard title="Organization details" description="These details support backend matching and evidence requests.">
+        <TextField label="Organization name" required={institutionType !== "NONE"} value={organizationName} onChangeText={setOrganizationName} placeholder="Example: Githunguri Dairy Cooperative" />
+        <TextField label="Member number" value={memberNumber} onChangeText={setMemberNumber} placeholder="Optional" />
+        <TextField label="Branch or buying station" value={branch} onChangeText={setBranch} placeholder="Optional" />
+        <TextField label="Collection centre" value={collectionCentre} onChangeText={setCollectionCentre} placeholder="Optional" />
+        <TextField label="Membership start date" value={membershipStart} onChangeText={setMembershipStart} placeholder="YYYY-MM-DD" />
+        <ToggleRow label="Active membership" description="Turn off only if the relationship is historical or inactive." value={active} onValueChange={setActive} />
+      </SectionCard>
+
+      {error ? <Notice title={error} tone="danger" /> : null}
+    </FormScreen>
   );
-}
-
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: Colors.charcoal100,
-  borderRadius: 10,
-  paddingHorizontal: 14,
-  paddingVertical: 12,
-  color: Colors.charcoal,
-  backgroundColor: "white",
-  marginTop: 14,
-};
-
-function buttonStyle(disabled: boolean) {
-  return {
-    alignItems: "center" as const,
-    borderRadius: 12,
-    backgroundColor: disabled ? Colors.charcoal300 : Colors.brand,
-    paddingVertical: 14,
-    marginTop: 24,
-  };
 }

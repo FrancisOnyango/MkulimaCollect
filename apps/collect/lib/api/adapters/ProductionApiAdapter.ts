@@ -1,4 +1,4 @@
-import { SecureTokenStore } from "@/features/auth/SecureTokenStore";
+﻿import { SecureTokenStore } from "@/features/auth/SecureTokenStore";
 import type { MkulimaScoreApi } from "../ApiClient";
 import type {
   AgentCredentials,
@@ -470,3 +470,4 @@ function formatApiError(status: number, data: unknown, raw: string): string {
 
   return `MkulimaScore API ${status}: ${raw || "Request failed"}`;
 }
+

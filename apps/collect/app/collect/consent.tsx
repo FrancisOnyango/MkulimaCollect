@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
-import { Colors } from "@/constants/colors";
+import { FormScreen, Notice, PrimaryButton, SectionCard, StepHeader, ToggleRow } from "@/components/ui/FormKit";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { saveConsent } from "@/features/farmers/consentRepository";
@@ -11,13 +10,15 @@ export default function ConsentStep() {
   const db = useDatabase();
   const { agent } = useAuth();
   const [accepted, setAccepted] = useState(false);
+  const [evidenceAuthorized, setEvidenceAuthorized] = useState(true);
   const [mpesaAuthorized, setMpesaAuthorized] = useState(false);
+  const [syncAuthorized, setSyncAuthorized] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleContinue() {
-    if (!agent || !accepted) {
-      setError("Consent is required before collection can continue.");
+    if (!agent || !accepted || !syncAuthorized) {
+      setError("Farmer consent and secure sync authorization are required before collection can continue.");
       return;
     }
 
@@ -36,7 +37,12 @@ export default function ConsentStep() {
         method: "DIGITAL",
         language: "en",
         agentId: agent.id,
-        itemsAgreed: ["data_collection", "evidence_capture", "offline_storage", "sync_to_mkulimascore"],
+        itemsAgreed: [
+          "data_collection",
+          evidenceAuthorized ? "evidence_capture" : "evidence_declined",
+          "offline_storage",
+          "sync_to_mkulimascore",
+        ],
         mpesaAuthorized,
         dependsOn: [farmerOperationUuid],
       });
@@ -50,38 +56,27 @@ export default function ConsentStep() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.surface, padding: 24, justifyContent: "center" }}>
-      <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>Consent</Text>
-      <Text style={{ color: Colors.charcoal500, marginTop: 8 }}>Confirm the farmer agrees to data collection, local storage, evidence capture, and secure sync.</Text>
+    <FormScreen footer={<PrimaryButton label="Start farmer profile" loading={saving} onPress={handleContinue} />}>
+      <StepHeader
+        eyebrow="MkulimaCollect field intake"
+        title="Consent and data rights"
+        description="Confirm the farmer understands what will be collected, where it is stored, and how it will feed MkulimaScore after sync."
+        step={1}
+        total={8}
+      />
 
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: accepted }}
-        onPress={() => setAccepted((value) => !value)}
-        style={{ marginTop: 24, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: accepted ? Colors.brand : Colors.charcoal100, backgroundColor: accepted ? Colors.brandLight : "white" }}
-      >
-        <Text style={{ color: Colors.charcoal, fontWeight: "700" }}>{accepted ? "Checked" : "Unchecked"} - Farmer consent captured</Text>
-      </Pressable>
+      <SectionCard title="Required authorization" description="Read this section to the farmer before recording their response. The record is saved offline with a local audit trail.">
+        <ToggleRow label="Farmer agrees to field data collection" description="Identity, farm, enterprise, production, and membership information." value={accepted} onValueChange={setAccepted} />
+        <ToggleRow label="Secure sync to MkulimaScore" description="Data remains queued locally until the device syncs to the approved ingestion API." value={syncAuthorized} onValueChange={setSyncAuthorized} />
+      </SectionCard>
 
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: mpesaAuthorized }}
-        onPress={() => setMpesaAuthorized((value) => !value)}
-        style={{ marginTop: 12, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: mpesaAuthorized ? Colors.brand : Colors.charcoal100, backgroundColor: "white" }}
-      >
-        <Text style={{ color: Colors.charcoal700 }}>{mpesaAuthorized ? "Checked" : "Unchecked"} - M-PESA statement authorization</Text>
-      </Pressable>
+      <SectionCard title="Optional authorization" description="These options improve scoring confidence but should only be enabled when the farmer explicitly agrees.">
+        <ToggleRow label="Evidence capture" description="Photos, documents, farm records, delivery slips, and payment statements." value={evidenceAuthorized} onValueChange={setEvidenceAuthorized} />
+        <ToggleRow label="M-PESA statement review" description="Used later for payment history verification where available." value={mpesaAuthorized} onValueChange={setMpesaAuthorized} />
+      </SectionCard>
 
-      {error ? <Text style={{ color: Colors.redField, marginTop: 14 }}>{error}</Text> : null}
-
-      <Pressable
-        accessibilityRole="button"
-        disabled={saving}
-        onPress={handleContinue}
-        style={{ alignItems: "center", borderRadius: 12, backgroundColor: saving ? Colors.charcoal300 : Colors.brand, paddingVertical: 14, marginTop: 24 }}
-      >
-        {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "700" }}>Continue</Text>}
-      </Pressable>
-    </View>
+      <Notice title="Offline-first protection" message="This app does not write directly into scoring tables. It creates field records and sync operations for backend validation." tone="success" />
+      {error ? <Notice title={error} tone="danger" /> : null}
+    </FormScreen>
   );
 }

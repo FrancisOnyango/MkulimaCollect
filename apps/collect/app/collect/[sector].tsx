@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { Colors } from "@/constants/colors";
+import { ChoiceGroup, FormScreen, Notice, PrimaryButton, SecondaryButton, SectionCard, StepHeader, TextField, ToggleRow } from "@/components/ui/FormKit";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { saveExpense, saveProductionObservation } from "@/features/production/productionRepository";
 import { getSectorSchema } from "@/features/sectors/dairySchema";
@@ -27,10 +27,11 @@ export default function SectorCollectionScreen() {
       return;
     }
 
-    const missing = section.fields.filter((field) => field.required && isVisible(field, values) && !hasValue(values[field.id]));
+    const visibleFields = section.fields.filter((field) => isVisible(field, values));
+    const missing = visibleFields.filter((field) => field.required && !hasValue(values[field.id]));
 
     if (missing.length) {
-      setError(`Missing required: ${missing.map((field) => field.label).join(", ")}`);
+      setError(`Complete required fields: ${missing.map((field) => field.label).join(", ")}.`);
       return;
     }
 
@@ -38,7 +39,7 @@ export default function SectorCollectionScreen() {
     setError(null);
 
     try {
-      const payload = Object.fromEntries(section.fields.filter((field) => isVisible(field, values)).map((field) => [field.id, values[field.id] ?? null]));
+      const payload = Object.fromEntries(visibleFields.map((field) => [field.id, values[field.id] ?? null]));
 
       await saveProductionObservation(db, {
         enterpriseId: params.enterpriseId,
@@ -79,102 +80,76 @@ export default function SectorCollectionScreen() {
 
   if (!section) {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.surface, padding: 24 }}>
-        <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>No schema</Text>
-      </View>
+      <FormScreen>
+        <StepHeader eyebrow="Sector schema" title="No schema available" description="This sector does not have an active collection schema on this device." />
+      </FormScreen>
     );
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: Colors.surface }} contentContainerStyle={{ padding: 18 }}>
-      <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>{schema.title}</Text>
-      <Text style={{ color: Colors.charcoal500, marginTop: 6 }}>Schema {schema.id} v{schema.version}</Text>
-      <View style={progressStyle}>
-        <Text style={{ color: Colors.brandDark, fontWeight: "700" }}>{section.title}</Text>
-        <Text style={{ color: Colors.charcoal500 }}>{sectionIndex + 1} of {schema.sections.length}</Text>
-      </View>
-      {section.fields.filter((field) => isVisible(field, values)).map((field) => (
-        <FieldInput key={field.id} field={field} value={values[field.id]} onChange={(value) => setValues((existing) => ({ ...existing, [field.id]: value }))} />
-      ))}
-      {error ? <Text style={{ color: Colors.redField, marginTop: 14 }}>{error}</Text> : null}
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={saving || sectionIndex === 0}
-          onPress={() => setSectionIndex((current) => Math.max(0, current - 1))}
-          style={{ ...navButtonStyle, backgroundColor: sectionIndex === 0 ? Colors.charcoal300 : Colors.charcoal700 }}
-        >
-          <Text style={buttonTextStyle}>Back</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={saving}
-          onPress={() => saveCurrentSection(isLast ? undefined : sectionIndex + 1)}
-          style={{ ...navButtonStyle, backgroundColor: saving ? Colors.charcoal300 : Colors.brand }}
-        >
-          {saving ? <ActivityIndicator color="white" /> : <Text style={buttonTextStyle}>{isLast ? "Finish production" : "Save and next"}</Text>}
-        </Pressable>
-      </View>
-    </ScrollView>
+    <FormScreen
+      footer={
+        <View style={styles.footerRow}>
+          <SecondaryButton label="Back" disabled={saving || sectionIndex === 0} onPress={() => setSectionIndex((current) => Math.max(0, current - 1))} />
+          <View style={styles.footerButton}>
+            <PrimaryButton label={isLast ? "Finish production" : "Save and next"} loading={saving} onPress={() => saveCurrentSection(isLast ? undefined : sectionIndex + 1)} />
+          </View>
+        </View>
+      }
+    >
+      <StepHeader
+        eyebrow={`Schema ${schema.id} v${schema.version}`}
+        title={schema.title}
+        description="Capture production, market, cost, health, asset, and evidence signals for this enterprise. Required fields are validated before each section is saved offline."
+        step={sectionIndex + 1}
+        total={schema.sections.length}
+      />
+
+      <SectionCard title={section.title} description={sectionDescription(section.id)}>
+        {section.fields.filter((field) => isVisible(field, values)).map((field) => (
+          <FieldInput key={field.id} field={field} value={values[field.id]} onChange={(value) => setValues((existing) => ({ ...existing, [field.id]: value }))} />
+        ))}
+      </SectionCard>
+
+      {section.id === "evidence" ? <Notice title="Evidence prompts" message="This section records what evidence is expected. Actual photos and documents are attached in the evidence step after production capture." tone="warning" /> : null}
+      {error ? <Notice title={error} tone="danger" /> : null}
+    </FormScreen>
   );
 }
 
 function FieldInput({ field, value, onChange }: { field: SectorField; value: FormValue | undefined; onChange(value: FormValue): void }) {
   if (field.type === "yes_no") {
-    return (
-      <View style={switchRowStyle}>
-        <Text style={{ color: Colors.charcoal, fontWeight: "700" }}>{field.label}{field.required ? " *" : ""}</Text>
-        <Switch value={value === true} onValueChange={onChange} />
-      </View>
-    );
+    return <ToggleRow label={`${field.label}${field.required ? " *" : ""}`} value={value === true} onValueChange={onChange} />;
   }
 
-  if (field.type === "single_choice" || field.type === "multiple_choice") {
-    const selected = Array.isArray(value) ? value : [];
-    return (
-      <View style={fieldBlockStyle}>
-        <Text style={{ color: Colors.charcoal, fontWeight: "700" }}>{field.label}{field.required ? " *" : ""}</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-          {field.options?.map((option) => {
-            const active = field.type === "single_choice" ? value === option : selected.includes(option);
-            return (
-              <Pressable
-                accessibilityRole="button"
-                key={option}
-                onPress={() => {
-                  if (field.type === "single_choice") {
-                    onChange(option);
-                  } else {
-                    onChange(active ? selected.filter((item) => item !== option) : [...selected, option]);
-                  }
-                }}
-                style={{ borderRadius: 10, borderWidth: 1, borderColor: active ? Colors.brand : Colors.charcoal100, backgroundColor: active ? Colors.brandLight : "white", paddingHorizontal: 12, paddingVertical: 10 }}
-              >
-                <Text style={{ color: active ? Colors.brandDark : Colors.charcoal700, fontWeight: "700" }}>{option}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-    );
+  if (field.type === "single_choice") {
+    return <ChoiceGroup label={field.label} required={field.required} value={typeof value === "string" ? value : undefined} options={field.options ?? []} onChange={(next) => onChange(next as string)} />;
+  }
+
+  if (field.type === "multiple_choice") {
+    return <ChoiceGroup label={field.label} required={field.required} values={Array.isArray(value) ? value : []} options={field.options ?? []} multiple onChange={(next) => onChange(next as string[])} />;
   }
 
   if (field.type === "evidence") {
     return (
-      <Pressable accessibilityRole="button" onPress={() => onChange("requested")} style={fieldBlockStyle}>
-        <Text style={{ color: Colors.charcoal, fontWeight: "700" }}>{field.label}</Text>
-        <Text style={{ color: Colors.charcoal500, marginTop: 6 }}>Evidence prompt recorded. Add images from the Evidence step.</Text>
-      </Pressable>
+      <ToggleRow
+        label={field.label}
+        description="Mark this prompt when the farmer has this evidence available for capture or later upload."
+        value={value === "available"}
+        onValueChange={(available) => onChange(available ? "available" : "")}
+      />
     );
   }
 
   return (
-    <TextInput
-      keyboardType={["integer", "decimal", "currency", "quantity"].includes(field.type) ? "decimal-pad" : "default"}
-      placeholder={`${field.label}${field.unit ? ` (${field.unit})` : ""}${field.required ? " *" : ""}`}
+    <TextField
+      label={field.label}
+      required={field.required}
+      helper={field.unit ? `Unit: ${field.unit}` : helperFor(field)}
+      placeholder={placeholderFor(field)}
       value={typeof value === "string" ? value : ""}
       onChangeText={onChange}
-      style={inputStyle}
+      keyboardType={["integer", "decimal", "currency", "quantity"].includes(field.type) ? "decimal-pad" : "default"}
     />
   );
 }
@@ -191,9 +166,46 @@ function hasValue(value: FormValue | undefined) {
   return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== "";
 }
 
-const progressStyle = { backgroundColor: Colors.brandLight, borderRadius: 12, padding: 14, marginTop: 16, flexDirection: "row" as const, justifyContent: "space-between" as const };
-const fieldBlockStyle = { backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginTop: 14 };
-const switchRowStyle = { ...fieldBlockStyle, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const };
-const inputStyle = { borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: Colors.charcoal, backgroundColor: "white", marginTop: 14 };
-const navButtonStyle = { flex: 1, alignItems: "center" as const, borderRadius: 12, paddingVertical: 14 };
-const buttonTextStyle = { color: "white", fontWeight: "700" as const };
+function placeholderFor(field: SectorField) {
+  if (field.type === "currency") {
+    return "KES";
+  }
+
+  if (field.type === "date") {
+    return "YYYY-MM-DD";
+  }
+
+  return field.unit ? `Enter ${field.unit}` : "Enter response";
+}
+
+function helperFor(field: SectorField) {
+  if (field.type === "text") {
+    return "Use concise notes that an operations reviewer can verify later.";
+  }
+
+  return undefined;
+}
+
+function sectionDescription(sectionId: string) {
+  switch (sectionId) {
+    case "costs":
+      return "Capture typical monthly or cycle costs. Positive values are also stored as expense records.";
+    case "market":
+    case "sales":
+      return "Record buyer, price, delivery, and payment signals used for verification and scoring confidence.";
+    case "evidence":
+      return "Identify documents and photos that should be attached before profile submission.";
+    default:
+      return "Complete the strongest available production signals for this enterprise.";
+  }
+}
+
+const styles = StyleSheet.create({
+  footerRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  footerButton: {
+    flex: 1,
+  },
+});

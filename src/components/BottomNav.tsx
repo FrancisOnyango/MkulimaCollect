@@ -40,6 +40,9 @@ export default function BottomNav({ activeTab, onTabChange, onCollect }: BottomN
     const active = activeTab === id
     return (
       <button
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
         onClick={() => onTabChange(id)}
         className={`flex flex-col items-center gap-1 flex-1 py-2 transition-colors ${active ? "text-brand" : "text-charcoal-300"}`}
       >
@@ -57,6 +60,8 @@ export default function BottomNav({ activeTab, onTabChange, onCollect }: BottomN
       {/* Collect FAB */}
       <div className="flex flex-col items-center flex-1 -mt-5">
         <button
+          type="button"
+          aria-label="Collect"
           onClick={onCollect}
           className="w-14 h-14 rounded-full bg-brand flex items-center justify-center shadow-lg shadow-brand/30 active:scale-95 transition-transform"
         >

@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
 import siteConfiguration from './.figma/make/site.json'
+import fs from 'node:fs'
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -23,6 +24,21 @@ export default defineConfig(({ mode }) => {
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: '/src/**/*.stories.{ts,tsx,js,jsx}' }),
+    // Emit repository root sw.js into the build output so the service worker is available at /sw.js
+    {
+      name: 'emit-root-sw',
+      generateBundle() {
+        try {
+          const swPath = './sw.js';
+          if (fs.existsSync(swPath)) {
+            const source = fs.readFileSync(swPath, 'utf8');
+            this.emitFile({ type: 'asset', fileName: 'sw.js', source });
+          }
+        } catch (e) {
+          // ignore
+        }
+      },
+    },
     ],
     resolve: {
       alias: {

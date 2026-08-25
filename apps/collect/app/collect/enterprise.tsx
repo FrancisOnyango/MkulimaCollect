@@ -1,27 +1,28 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { Colors } from "@/constants/colors";
+import { ChoiceGroup, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader } from "@/components/ui/FormKit";
 import { SectorId, type SectorIdValue } from "@/constants/sectorIds";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { createEnterprise } from "@/features/enterprises/enterpriseRepository";
 
-const sectors: { id: SectorIdValue; label: string }[] = [
-  { id: SectorId.DAIRY, label: "Dairy" },
-  { id: SectorId.MAIZE, label: "Maize" },
-  { id: SectorId.TEA, label: "Tea" },
-  { id: SectorId.COFFEE, label: "Coffee" },
-  { id: SectorId.AVOCADO, label: "Avocado" },
-  { id: SectorId.RICE, label: "Rice" },
-  { id: SectorId.IRISH_POTATO, label: "Irish potato" },
-  { id: SectorId.POULTRY, label: "Poultry" },
-  { id: SectorId.TOMATO, label: "Tomato" },
-  { id: SectorId.MACADAMIA, label: "Macadamia" },
-  { id: SectorId.AQUACULTURE, label: "Aquaculture" },
-  { id: SectorId.LIVESTOCK_MEAT, label: "Livestock meat" },
-  { id: SectorId.BEANS, label: "Beans" },
-  { id: SectorId.HORTICULTURE, label: "Horticulture" },
+const sectors: { id: SectorIdValue; label: string; group: string }[] = [
+  { id: SectorId.DAIRY, label: "Dairy", group: "Livestock" },
+  { id: SectorId.POULTRY, label: "Poultry", group: "Livestock" },
+  { id: SectorId.LIVESTOCK_MEAT, label: "Livestock meat", group: "Livestock" },
+  { id: SectorId.AQUACULTURE, label: "Aquaculture", group: "Livestock" },
+  { id: SectorId.MAIZE, label: "Maize", group: "Annual crops" },
+  { id: SectorId.RICE, label: "Rice", group: "Annual crops" },
+  { id: SectorId.IRISH_POTATO, label: "Irish potato", group: "Annual crops" },
+  { id: SectorId.BEANS, label: "Beans", group: "Annual crops" },
+  { id: SectorId.TOMATO, label: "Tomato", group: "Horticulture" },
+  { id: SectorId.HORTICULTURE, label: "Horticulture", group: "Horticulture" },
+  { id: SectorId.TEA, label: "Tea", group: "Perennial crops" },
+  { id: SectorId.COFFEE, label: "Coffee", group: "Perennial crops" },
+  { id: SectorId.AVOCADO, label: "Avocado", group: "Perennial crops" },
+  { id: SectorId.MACADAMIA, label: "Macadamia", group: "Perennial crops" },
 ];
+
+const groups = ["Livestock", "Annual crops", "Horticulture", "Perennial crops"] as const;
 
 export default function EnterpriseStep() {
   const db = useDatabase();
@@ -29,9 +30,11 @@ export default function EnterpriseStep() {
   const farmerId = params.farmerId ?? "";
   const farmId = params.farmId ?? "";
   const dependsOn = params.dependsOn ? [params.dependsOn] : [];
+  const [group, setGroup] = useState<(typeof groups)[number]>("Livestock");
   const [sector, setSector] = useState<SectorIdValue>(SectorId.DAIRY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const visibleSectors = sectors.filter((item) => item.group === group);
 
   async function handleContinue() {
     if (!farmerId || !farmId) {
@@ -59,30 +62,29 @@ export default function EnterpriseStep() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.surface, padding: 24, justifyContent: "center" }}>
-      <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>Enterprise</Text>
-      <Text style={{ color: Colors.charcoal500, marginTop: 8 }}>Create an enterprise linked to this farm. Each sector uses a versioned local collection schema.</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 20 }}>
-        {sectors.map((item) => (
-          <Pressable
-            accessibilityRole="button"
-            key={item.id}
-            onPress={() => setSector(item.id)}
-            style={{ paddingHorizontal: 14, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: sector === item.id ? Colors.brand : Colors.charcoal100, backgroundColor: sector === item.id ? Colors.brandLight : "white" }}
-          >
-            <Text style={{ color: sector === item.id ? Colors.brandDark : Colors.charcoal700, fontWeight: "700" }}>{item.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {error ? <Text style={{ color: Colors.redField, marginTop: 14 }}>{error}</Text> : null}
-      <Pressable
-        accessibilityRole="button"
-        disabled={saving}
-        onPress={handleContinue}
-        style={{ alignItems: "center", borderRadius: 12, backgroundColor: saving ? Colors.charcoal300 : Colors.brand, paddingVertical: 14, marginTop: 24 }}
-      >
-        {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "700" }}>Continue</Text>}
-      </Pressable>
-    </View>
+    <FormScreen footer={<PrimaryButton label="Open sector form" loading={saving} onPress={handleContinue} />}>
+      <StepHeader
+        eyebrow="Enterprise profile"
+        title="Select production sector"
+        description="MkulimaCollect supports multiple agricultural sectors. Choose the enterprise that should feed this farmer's MkulimaScore profile."
+        step={5}
+        total={8}
+      />
+
+      <SectionCard title="Sector family" description="Group sectors by business model so agents can find the right form quickly.">
+        <ChoiceGroup label="Enterprise group" value={group} options={groups} onChange={(value) => {
+          const nextGroup = value as (typeof groups)[number];
+          setGroup(nextGroup);
+          setSector(sectors.find((item) => item.group === nextGroup)?.id ?? SectorId.DAIRY);
+        }} required />
+      </SectionCard>
+
+      <SectionCard title="Enterprise sector" description="The next screen loads a versioned schema with production, market, costs, and evidence prompts for the selected sector.">
+        <ChoiceGroup label="Sector" value={sector} options={visibleSectors.map((item) => ({ label: item.label, value: item.id }))} onChange={(value) => setSector(value as SectorIdValue)} required />
+      </SectionCard>
+
+      <Notice title="Not dairy-only" message="Dairy is one supported sector. Crop, livestock, horticulture, aquaculture, and perennial crop forms are available from the same intake flow." tone="success" />
+      {error ? <Notice title={error} tone="danger" /> : null}
+    </FormScreen>
   );
 }

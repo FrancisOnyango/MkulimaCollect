@@ -1,0 +1,42 @@
+name: EAS Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  eas-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+      - name: Install dependencies
+        run: npm ci
+      - name: EAS login
+        env:
+          EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+        run: |
+          eas login --token $EAS_TOKEN
+      - name: Run EAS build (android + ios)
+        env:
+          EAS_NON_INTERACTIVE: '1'
+          EAS_BUILD_AUTOCERT: '0'
+        run: |
+          eas build --platform all --non-interactive
+      - name: Upload EAS build artifacts (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eas-build-artifacts
+          path: |
+            ./eas-build-artifacts/**
+            ./*.apk
+            ./*.aab
+            ./*.ipa
+            ./build/**

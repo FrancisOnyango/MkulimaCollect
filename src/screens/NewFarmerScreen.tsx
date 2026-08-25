@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 
 interface NewFarmerScreenProps {
   onBack: () => void
@@ -21,13 +21,108 @@ const STEPS = [
 export default function NewFarmerScreen({ onBack, onGpsMap, onComplete }: NewFarmerScreenProps) {
   const [step, setStep] = useState(0)
 
+  // Autosave draft state stored in localStorage under this key
+  const DRAFT_KEY = "mkulima:new-farmer:draft:v1"
+  const mounted = useRef(false)
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
+  const [hasDraft, setHasDraft] = useState(false)
+
+  const defaultDraft = useRef<any>({ step: 0, values: {} })
+
+  // Load draft on mount
+  useEffect(() => {
+    mounted.current = true
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (raw) {
+        const data = JSON.parse(raw)
+        if (data && typeof data === "object") {
+          defaultDraft.current = data
+          setStep(data.step || 0)
+          setDraftSavedAt(data.updatedAt || null)
+          setHasDraft(true)
+        }
+      }
+    } catch (e) {
+      // ignore parse errors
+    }
+
+    return () => { mounted.current = false }
+  }, [])
+
+  // Helper to persist current draft object
+  const saveDraft = (partial?: any) => {
+    try {
+      const cur = { ...defaultDraft.current }
+      if (partial) {
+        cur.values = { ...cur.values, ...partial }
+      }
+      cur.step = step
+      cur.updatedAt = new Date().toISOString()
+      defaultDraft.current = cur
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(cur))
+      setDraftSavedAt(cur.updatedAt)
+      setHasDraft(true)
+    } catch (e) {
+      // ignore storage errors (private mode, quota)
+    }
+  }
+
+  // Periodic autosave
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!mounted.current) return
+      saveDraft()
+    }, 5000)
+    return () => clearInterval(id)
+  }, [step])
+
+  // Expose a method to update draft values from child fields via Field onValueChange
+  const updateDraftValue = (name: string, value: any) => {
+    saveDraft({ [name]: value })
+  }
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY)
+    } catch (e) {
+      // ignore storage errors
+    }
+    defaultDraft.current = { step: 0, values: {} }
+    setStep(0)
+    setHasDraft(false)
+    setDraftSavedAt(null)
+  }
+
+  // Attach a global updater for the Field helper to call when present
+  useEffect(() => {
+    const w = window as Window & { __mk_updateDraft?: (key: string, value: any) => void }
+    w.__mk_updateDraft = updateDraftValue
+    return () => { w.__mk_updateDraft = undefined }
+  }, [step])
+
+  // Step validators can register here. If a validator for the current step exists and returns false,
+  // navigation forward will be blocked and the step is expected to show inline validation messages.
+  const validatorsRef = { current: {} as Record<number, () => boolean> }
+
+  const registerValidator = (stepIndex: number, fn: () => boolean) => {
+    validatorsRef.current[stepIndex] = fn
+  }
+
   const next = () => {
+    const validator = validatorsRef.current[step]
+    if (validator && !validator()) {
+      // validation failed; don't progress
+      return
+    }
+
     if (step === STEPS.length - 1) {
       onComplete()
     } else {
       setStep(s => s + 1)
     }
   }
+
   const prev = () => {
     if (step === 0) onBack()
     else setStep(s => s - 1)
@@ -38,7 +133,7 @@ export default function NewFarmerScreen({ onBack, onGpsMap, onComplete }: NewFar
       {/* Top bar */}
       <div className="bg-white pt-12 pb-0 border-b border-charcoal-100">
         <div className="flex items-center justify-between px-5 pb-3">
-          <button onClick={prev} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-charcoal-50 -ml-2 transition-colors">
+          <button onClick={prev} aria-label="Go back" className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-charcoal-50 -ml-2 transition-colors">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1C1C1E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
@@ -47,7 +142,15 @@ export default function NewFarmerScreen({ onBack, onGpsMap, onComplete }: NewFar
             <p className="text-xs text-charcoal-500 font-medium">New farmer</p>
             <p className="text-xs font-mono text-charcoal-300">Step {step + 1} of {STEPS.length}</p>
           </div>
-          <button onClick={onBack} className="text-xs text-charcoal-500 hover:text-brand transition-colors">
+          <button
+            onClick={() => {
+              // Confirm before exiting to avoid accidental loss
+              const confirmed = window.confirm("Save and exit? Your progress will be saved as a draft.")
+              if (confirmed) onBack()
+            }}
+            aria-label="Save and exit"
+            className="text-xs text-charcoal-500 hover:text-brand transition-colors"
+          >
             Save & exit
           </button>
         </div>
@@ -74,10 +177,31 @@ export default function NewFarmerScreen({ onBack, onGpsMap, onComplete }: NewFar
         </div>
       </div>
 
+      {hasDraft && (
+        <div className="px-5 pb-4">
+          <div className="rounded-2xl border border-brand/20 bg-brand-light p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">Draft saved</p>
+                <p className="text-xs text-charcoal/70 mt-0.5 truncate">
+                  {draftSavedAt ? `Last autosave: ${new Date(draftSavedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Progress has been saved automatically'}
+                </p>
+              </div>
+              <button
+                onClick={clearDraft}
+                className="text-[11px] font-medium text-brand hover:text-brand-dark"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Step content */}
       <div className="flex-1 overflow-y-auto scroll-hidden">
         {step === 0 && <ConsentStep />}
-        {step === 1 && <IdentityStep />}
+        {step === 1 && <IdentityStep registerValidator={registerValidator} />}
         {step === 2 && <LocationStep />}
         {step === 3 && <MembershipStep />}
         {step === 4 && <FarmStep onMapFarm={onGpsMap} />}
@@ -223,26 +347,59 @@ function ConsentCapture() {
   )
 }
 
-function IdentityStep() {
+function IdentityStep({ registerValidator }: { registerValidator?: (stepIndex: number, fn: () => boolean) => void }) {
   const [idType, setIdType] = useState("National ID")
   const [gender, setGender] = useState("")
 
+  // Controlled fields for validation
+  const [fullName, setFullName] = useState("")
+  const [firstName, setFirstName] = useState("Mary")
+  const [surname, setSurname] = useState("Wanjiku")
+  const [preferredName, setPreferredName] = useState("")
+  const [idNumber, setIdNumber] = useState("")
+  const [dob, setDob] = useState("")
+  const [primaryPhone, setPrimaryPhone] = useState("")
+  const [altPhone, setAltPhone] = useState("")
+
+  const [errors, setErrors] = useState<Record<string,string>>({})
+
+  // Register a validator for this step so parent can call it before advancing
+  // Validator returns true when the step is valid
+  if (registerValidator) {
+    registerValidator(1, () => {
+      const nextErrors: Record<string,string> = {}
+      // Basic validations
+      if (!fullName.trim() && (!firstName.trim() || !surname.trim())) {
+        nextErrors.name = "Enter the farmer's name"
+      }
+      if (!idNumber.trim()) nextErrors.idNumber = "Enter ID number"
+      if (!primaryPhone.trim()) nextErrors.primaryPhone = "Enter primary phone"
+
+      setErrors(nextErrors)
+      return Object.keys(nextErrors).length === 0
+    })
+  }
+
   return (
     <div className="px-5 py-5 flex flex-col gap-4 pb-4">
-      <Field label="Full legal name" placeholder="As per official document" />
+      <Field name="fullName" label="Full legal name" placeholder="As per official document" value={fullName} onValueChange={setFullName} required />
+      {errors.name && <p className="text-xs text-red-field">{errors.name}</p>}
+
       <div className="grid grid-cols-2 gap-3">
-        <Field label="First name" placeholder="First name" value="Mary" />
-        <Field label="Surname" placeholder="Surname" value="Wanjiku" />
+        <Field name="firstName" label="First name" placeholder="First name" value={firstName} onValueChange={setFirstName} required />
+        <Field name="surname" label="Surname" placeholder="Surname" value={surname} onValueChange={setSurname} required />
       </div>
-      <Field label="Preferred name" placeholder="If different from above" />
+
+      <Field name="preferredName" label="Preferred name" placeholder="If different from above" value={preferredName} onValueChange={setPreferredName} />
 
       <div>
         <label className="text-xs font-medium text-charcoal-500 mb-2 block uppercase tracking-wide">ID type</label>
         <div className="flex gap-2">
-          {["National ID", "Passport", "Alien ID"].map(t => (
+          {['National ID', 'Passport', 'Alien ID'].map(t => (
             <button
               key={t}
               onClick={() => setIdType(t)}
+              type="button"
               className={`flex-1 py-2.5 rounded-xl text-xs font-medium border transition-colors ${
                 idType === t ? "bg-brand text-white border-brand" : "bg-white text-charcoal-500 border-charcoal-200"
               }`}
@@ -253,7 +410,8 @@ function IdentityStep() {
         </div>
       </div>
 
-      <Field label="ID number" placeholder="Enter ID number" type="numeric" hint="Will be masked after capture" />
+      <Field name="idNumber" label="ID number" placeholder="Enter ID number" type="text" hint="Will be masked after capture" value={idNumber} onValueChange={setIdNumber} required />
+      {errors.idNumber && <p className="text-xs text-red-field">{errors.idNumber}</p>}
 
       <div>
         <label className="text-xs font-medium text-charcoal-500 mb-2 block uppercase tracking-wide">Gender</label>
@@ -261,6 +419,7 @@ function IdentityStep() {
           {["Female", "Male", "Other"].map(g => (
             <button
               key={g}
+              type="button"
               onClick={() => setGender(g)}
               className={`flex-1 py-2.5 rounded-xl text-xs font-medium border transition-colors ${
                 gender === g ? "bg-brand text-white border-brand" : "bg-white text-charcoal-500 border-charcoal-200"
@@ -273,11 +432,12 @@ function IdentityStep() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Date of birth" placeholder="DD/MM/YYYY" type="numeric" />
-        <Field label="Primary phone" placeholder="07XX XXX XXX" type="tel" />
+        <Field name="dob" label="Date of birth" placeholder="DD/MM/YYYY" type="text" value={dob} onValueChange={setDob} />
+        <Field name="primaryPhone" label="Primary phone" placeholder="07XX XXX XXX" type="tel" value={primaryPhone} onValueChange={setPrimaryPhone} required />
       </div>
+      {errors.primaryPhone && <p className="text-xs text-red-field">{errors.primaryPhone}</p>}
 
-      <Field label="Alternative phone" placeholder="Optional" type="tel" />
+      <Field name="altPhone" label="Alternative phone" placeholder="Optional" type="tel" value={altPhone} onValueChange={setAltPhone} />
 
       {/* ID scan */}
       <div className="bg-white border border-charcoal-100 rounded-2xl p-4">
@@ -746,18 +906,40 @@ function ReviewStep({ onEdit }: { onEdit: (step: number) => void }) {
 
 // ── Shared form primitives ─────────────────────────────────────
 
-function Field({ label, placeholder, type, value, hint }: {
-  label?: string; placeholder?: string; type?: string; value?: string; hint?: string
+function Field({ label, placeholder, type, value, hint, name, onValueChange, required }: {
+  label?: string; placeholder?: string; type?: string; value?: string; hint?: string; name?: string; onValueChange?: (v: string) => void; required?: boolean
 }) {
-  const [val, setVal] = useState(value || "")
+  const [val, setVal] = useState(value ?? "")
+
+  useEffect(() => {
+    if (value !== undefined && value !== val) {
+      setVal(value)
+    }
+  }, [value])
+
+  const handleChange = (v: string) => {
+    setVal(v)
+    if (onValueChange) onValueChange(v)
+    try {
+      const w = window as Window & { __mk_updateDraft?: (key: string, value: any) => void }
+      if (w.__mk_updateDraft && name) w.__mk_updateDraft(name, v)
+    } catch (e) {
+      // ignore
+    }
+  }
+
   return (
     <div className="w-full">
-      {label && <label className="text-xs font-medium text-charcoal-500 mb-1.5 block uppercase tracking-wide">{label}</label>}
+      {label && <label htmlFor={name} className="text-xs font-medium text-charcoal-500 mb-1.5 block uppercase tracking-wide">{label}{required ? <span className="text-amber-field">*</span> : null}</label>}
       <input
+        id={name}
+        name={name}
+        aria-label={label || name}
+        aria-required={required ? "true" : "false"}
         type={type || "text"}
         placeholder={placeholder}
         value={val}
-        onChange={e => setVal(e.target.value)}
+        onChange={e => handleChange(e.target.value)}
         className="w-full border border-charcoal-100 rounded-xl px-4 py-3.5 text-sm text-charcoal bg-white focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand transition-all placeholder:text-charcoal-300"
       />
       {hint && <p className="text-xs text-charcoal-300 mt-1">{hint}</p>}

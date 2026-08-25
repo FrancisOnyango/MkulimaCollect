@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import type { AppDatabase } from "@/lib/db/database";
 import { serverMappings } from "@/lib/db/schema";
 import type { EntityType } from "./types";
+import * as Sentry from "@sentry/react";
+import { recordMetric } from "@/metrics";
 
 export async function saveMapping(
   db: AppDatabase,
@@ -13,8 +15,12 @@ export async function saveMapping(
     operationUuid?: string;
   },
 ): Promise<void> {
+  const id = Crypto.randomUUID();
+  Sentry.addBreadcrumb({ category: 'sync', message: `save-mapping ${id}`, data: { localUuid: input.localUuid, entityType: input.entityType, serverId: input.serverId } });
+  recordMetric('mapping.save', 1, { entity: input.entityType });
+
   await db.insert(serverMappings).values({
-    id: Crypto.randomUUID(),
+    id,
     localUuid: input.localUuid,
     entityType: input.entityType,
     serverId: input.serverId,

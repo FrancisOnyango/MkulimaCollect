@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { Colors } from "@/constants/colors";
+import { FormScreen, Notice, PrimaryButton, SectionCard, StepHeader, TextField } from "@/components/ui/FormKit";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { saveIdentity } from "@/features/farmers/identityRepository";
 
@@ -13,12 +12,14 @@ export default function IdentityStep() {
   const [fullLegalName, setFullLegalName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [surname, setSurname] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [nationalId, setNationalId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleContinue() {
-    if (!farmerId || (!fullLegalName && !firstName)) {
-      setError("Enter at least a full name or first name.");
+    if (!farmerId || (!fullLegalName.trim() && !firstName.trim())) {
+      setError("Enter at least a full legal name or first name.");
       return;
     }
 
@@ -28,9 +29,12 @@ export default function IdentityStep() {
     try {
       const operationUuid = await saveIdentity(db, {
         farmerId,
-        fullLegalName,
-        firstName,
-        surname,
+        fullLegalName: fullLegalName.trim(),
+        firstName: firstName.trim(),
+        surname: surname.trim(),
+        primaryPhoneLast4: phoneNumber.trim().slice(-4) || undefined,
+        nationalIdType: nationalId.trim() ? "NATIONAL_ID" : undefined,
+        nationalIdLast3: nationalId.trim().slice(-3) || undefined,
         dependsOn,
       });
 
@@ -43,36 +47,27 @@ export default function IdentityStep() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.surface, padding: 24, justifyContent: "center" }}>
-      <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>Identity</Text>
-      <TextInput placeholder="Full legal name" value={fullLegalName} onChangeText={setFullLegalName} style={inputStyle} />
-      <TextInput placeholder="First name" value={firstName} onChangeText={setFirstName} style={inputStyle} />
-      <TextInput placeholder="Surname" value={surname} onChangeText={setSurname} style={inputStyle} />
-      {error ? <Text style={{ color: Colors.redField, marginTop: 14 }}>{error}</Text> : null}
-      <Pressable accessibilityRole="button" disabled={saving} onPress={handleContinue} style={buttonStyle(saving)}>
-        {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "700" }}>Continue</Text>}
-      </Pressable>
-    </View>
+    <FormScreen footer={<PrimaryButton label="Continue to membership" loading={saving} onPress={handleContinue} />}>
+      <StepHeader
+        eyebrow="Farmer profile"
+        title="Identity details"
+        description="Capture the name exactly as it should appear in institutional records. Optional identifiers help reconciliation during backend validation."
+        step={2}
+        total={8}
+      />
+
+      <SectionCard title="Legal name" description="Use the farmer's official names where available. These fields form the first matching signal for MkulimaScore ingestion.">
+        <TextField label="Full legal name" required value={fullLegalName} onChangeText={setFullLegalName} placeholder="Example: Grace Wanjiku Mwangi" />
+        <TextField label="First name" value={firstName} onChangeText={setFirstName} placeholder="Grace" />
+        <TextField label="Surname" value={surname} onChangeText={setSurname} placeholder="Mwangi" />
+      </SectionCard>
+
+      <SectionCard title="Matching references" description="Optional today, but valuable for deduplication and later credit/payment verification.">
+        <TextField label="Primary phone number" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" placeholder="07xx xxx xxx" />
+        <TextField label="National ID or registration number" value={nationalId} onChangeText={setNationalId} keyboardType="number-pad" placeholder="Optional" />
+      </SectionCard>
+
+      {error ? <Notice title={error} tone="danger" /> : null}
+    </FormScreen>
   );
-}
-
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: Colors.charcoal100,
-  borderRadius: 10,
-  paddingHorizontal: 14,
-  paddingVertical: 12,
-  color: Colors.charcoal,
-  backgroundColor: "white",
-  marginTop: 14,
-};
-
-function buttonStyle(disabled: boolean) {
-  return {
-    alignItems: "center" as const,
-    borderRadius: 12,
-    backgroundColor: disabled ? Colors.charcoal300 : Colors.brand,
-    paddingVertical: 14,
-    marginTop: 24,
-  };
 }
