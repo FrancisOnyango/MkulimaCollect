@@ -17,6 +17,7 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
       - name: Install dependencies
+        working-directory: apps/collect
         run: npm ci
       - name: EAS login
         env:
@@ -24,6 +25,7 @@ jobs:
         run: |
           eas login --token $EAS_TOKEN
       - name: Run EAS build (android + ios)
+        working-directory: apps/collect
         env:
           EAS_NON_INTERACTIVE: '1'
           EAS_BUILD_AUTOCERT: '0'
