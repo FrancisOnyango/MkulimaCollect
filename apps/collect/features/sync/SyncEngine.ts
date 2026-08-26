@@ -57,9 +57,9 @@ export async function runSyncEngine(db: AppDatabase, api: MkulimaScoreApi): Prom
   } finally {
     try {
       // Record overall metrics and export them (Sentry + console)
-      const { exportMetrics } = await import('@/metricsExporter');
+      const { exportMetrics } = await import('@/lib/metricsExporter');
       // record simple metrics
-      const { recordMetric } = await import('@/metrics');
+      const { recordMetric } = await import('@/lib/metrics');
       recordMetric('sync.attempted', result.attempted);
       recordMetric('sync.synced', result.synced);
       recordMetric('sync.failed', result.failed);

@@ -9,13 +9,13 @@ const LOCK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes — consider longer on slow 
 export async function acquireSyncLock(db: AppDatabase): Promise<boolean> {
   const now = new Date();
   const rows = await db.select().from(appMetadata).where(eq(appMetadata.key, LOCK_KEY)).limit(1);
+  const existing = rows[0];
 
-  if (rows.length === 0) {
+  if (!existing) {
     await db.insert(appMetadata).values({ key: LOCK_KEY, value: now.toISOString(), updatedAt: now.toISOString() });
     return true;
   }
 
-  const existing = rows[0];
   const existingTs = new Date(existing.value);
   if (Date.now() - existingTs.getTime() > LOCK_TIMEOUT_MS) {
     // stale lock: overwrite

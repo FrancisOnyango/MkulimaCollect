@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import type { AppDatabase } from "@/lib/db/database";
 import { syncAttempts } from "@/lib/db/schema";
 import * as Sentry from "@sentry/react";
-import { recordMetric } from "@/metrics";
+import { recordMetric } from "@/lib/metrics";
 
 export async function startSyncAttempt(db: AppDatabase, entryUuid: string, attemptNumber: number): Promise<string> {
   const id = Crypto.randomUUID();

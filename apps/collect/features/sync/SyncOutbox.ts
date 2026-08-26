@@ -4,7 +4,7 @@ import { SyncState, type SyncStateValue } from "@/constants/syncStates";
 import type { AppDatabase } from "@/lib/db/database";
 import { syncOutbox } from "@/lib/db/schema";
 import type { CreateOutboxEntryInput, SyncOutboxEntry } from "./types";
-import { recordMetric } from "@/metrics";
+import { recordMetric } from "@/lib/metrics";
 
 type OutboxWriter = {
   insert: AppDatabase["insert"];

@@ -4,7 +4,7 @@ import type { AppDatabase } from "@/lib/db/database";
 import { serverMappings } from "@/lib/db/schema";
 import type { EntityType } from "./types";
 import * as Sentry from "@sentry/react";
-import { recordMetric } from "@/metrics";
+import { recordMetric } from "@/lib/metrics";
 
 export async function saveMapping(
   db: AppDatabase,
