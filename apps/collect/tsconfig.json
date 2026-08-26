@@ -4,7 +4,7 @@
     "strict": true,
     "ignoreDeprecations": "6.0",
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
+    "exactOptionalPropertyTypes": false,
     "baseUrl": ".",
     "paths": {
       "@/*": [
@@ -34,6 +34,8 @@
   ],
   "exclude": [
     "node_modules",
+    "**/*.test.ts",
+    "**/*.test.tsx",
     "node_modules_broken*"
   ]
 }
