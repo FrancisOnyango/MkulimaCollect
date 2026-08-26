@@ -79,8 +79,12 @@ if (TaskManager && TaskManager.defineTask) {
 
 // Also listen for the global event used by the web/service-worker pathway so that an
 // app context can trigger a background sync run if available.
-if (typeof globalThis?.addEventListener === 'function') {
-  globalThis.addEventListener('MKL_BACKGROUND_FETCH', () => {
+const nativeGlobal = globalThis as typeof globalThis & {
+  addEventListener?: (event: string, listener: () => void) => void;
+};
+
+if (typeof nativeGlobal.addEventListener === 'function') {
+  nativeGlobal.addEventListener('MKL_BACKGROUND_FETCH', () => {
     void runSyncFromBackground();
   });
 }
