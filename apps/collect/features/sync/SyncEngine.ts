@@ -22,7 +22,7 @@ export async function runSyncEngine(db: AppDatabase, api: MkulimaScoreApi): Prom
   const lockAcquired = await acquireSyncLock(db);
 
   if (!lockAcquired) {
-    Sentry.addBreadcrumb({ category: 'sync', message: 'sync-lock-acquire-failed', level: Sentry.Severity.Info });
+    Sentry.addBreadcrumb({ category: "sync", message: "sync-lock-acquire-failed", level: "info" });
     return { attempted: 0, synced: 0, failed: 0 };
   }
 

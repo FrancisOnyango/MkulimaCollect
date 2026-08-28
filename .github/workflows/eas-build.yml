@@ -2,43 +2,46 @@ name: EAS Build
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main, master ]
 
 jobs:
   eas-build:
+    name: Optional EAS cloud build
     runs-on: ubuntu-latest
+    env:
+      EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/collect
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/collect/package-lock.json
+
       - name: Install EAS CLI
-        run: npm install -g eas-cli
-      - name: Install dependencies
-        working-directory: apps/collect
-        run: npm ci
-      - name: EAS login
+        if: env.EAS_TOKEN != ''
+        run: npm install --global eas-cli
+
+      - name: Install app dependencies
+        if: env.EAS_TOKEN != ''
+        run: npm ci --legacy-peer-deps
+
+      - name: Build Android preview with EAS
+        if: env.EAS_TOKEN != ''
         env:
-          EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
-        run: |
-          eas login --token $EAS_TOKEN
-      - name: Run EAS build (android + ios)
-        working-directory: apps/collect
-        env:
-          EAS_NON_INTERACTIVE: '1'
-          EAS_BUILD_AUTOCERT: '0'
-        run: |
-          eas build --platform all --non-interactive
-      - name: Upload EAS build artifacts (if any)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: eas-build-artifacts
-          path: |
-            ./eas-build-artifacts/**
-            ./*.apk
-            ./*.aab
-            ./*.ipa
-            ./build/**
+          EAS_NON_INTERACTIVE: "1"
+        run: eas build --platform android --profile preview --non-interactive
+
+      - name: Skip EAS build
+        if: env.EAS_TOKEN == ''
+        run: echo "EAS_TOKEN is not configured; skipping optional EAS cloud build."

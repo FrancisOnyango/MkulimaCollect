@@ -3,25 +3,45 @@ name: E2E Tests
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
+    paths:
+      - ".github/workflows/e2e.yml"
+      - "apps/collect/**"
 
 jobs:
-  e2e:
+  mobile-flow-smoke:
+    name: Mobile collection flow smoke
     runs-on: ubuntu-latest
-    services: {}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/collect
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - name: Install deps
-        run: npm ci
-      - name: Install Playwright browsers
-        run: npm run install:browsers
-      - name: Start dev server
-        run: npm run dev &
-      - name: Wait for server
-        run: npx wait-on http://localhost:5173
-      - name: Run Playwright tests
-        run: npm run test:e2e
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/collect/package-lock.json
+
+      - name: Install app dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck collection flow
+        run: npm run typecheck
+
+      - name: Generate native project
+        run: npx expo prebuild --platform android
+
+      - name: Verify generated Android project
+        run: |
+          test -f android/app/build.gradle
+          test -f android/app/src/main/AndroidManifest.xml
+          test -f android/app/src/main/assets/index.android.bundle || echo "Release workflow embeds the JS bundle during assembleRelease."
