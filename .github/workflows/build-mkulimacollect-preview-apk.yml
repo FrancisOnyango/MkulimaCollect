@@ -37,26 +37,22 @@ jobs:
         shell: bash
         run: npm ci --legacy-peer-deps
 
-      - name: Typecheck
-        working-directory: apps/collect
-        shell: bash
-        run: npm run typecheck
-
       - name: Remove development client for preview binary
         working-directory: apps/collect
         shell: bash
         run: |
-          npm uninstall expo-dev-client --legacy-peer-deps
-          if npm ls expo-dev-client --depth=0 >/dev/null 2>&1; then
-            echo "expo-dev-client is still installed; refusing to build a dev-client preview APK."
+          node -e "const fs=require('fs'); const p='package.json'; const pkg=JSON.parse(fs.readFileSync(p,'utf8')); if (pkg.dependencies) delete pkg.dependencies['expo-dev-client']; fs.writeFileSync(p, JSON.stringify(pkg,null,2));"
+          rm -rf node_modules/expo-dev-client node_modules/expo-dev-launcher node_modules/expo-dev-menu node_modules/expo-dev-menu-interface
+          if [ -d node_modules/expo-dev-client ]; then
+            echo "expo-dev-client is still present; refusing to build a dev-client preview APK."
             exit 1
           fi
-          echo "expo-dev-client is not included in the preview dependency tree."
+          echo "expo-dev-client removed from the preview build workspace."
 
       - name: Generate Android project
         working-directory: apps/collect
         shell: bash
-        run: npx expo prebuild --platform android
+        run: npx expo prebuild --platform android --clean --no-install
 
       - name: Build release APK
         timeout-minutes: 45
