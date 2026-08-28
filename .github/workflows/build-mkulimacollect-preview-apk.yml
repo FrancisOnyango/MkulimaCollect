@@ -14,10 +14,6 @@ jobs:
     name: Android standalone preview APK
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        shell: bash
-
     env:
       CI: true
       EXPO_NO_TELEMETRY: "1"
@@ -37,21 +33,24 @@ jobs:
           cache-dependency-path: apps/collect/package-lock.json
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
       - name: Install app dependencies
         working-directory: apps/collect
+        shell: bash
         run: npm ci --legacy-peer-deps
 
       - name: Typecheck
         working-directory: apps/collect
+        shell: bash
         run: npm run typecheck
 
       - name: Remove development client for preview binary
         working-directory: apps/collect
+        shell: bash
         run: |
           npm uninstall expo-dev-client --legacy-peer-deps
           if npm ls expo-dev-client --depth=0 >/dev/null 2>&1; then
@@ -62,11 +61,13 @@ jobs:
 
       - name: Generate Android project
         working-directory: apps/collect
+        shell: bash
         run: npx expo prebuild --platform android
 
       - name: Build release APK
         timeout-minutes: 45
         working-directory: apps/collect/android
+        shell: bash
         run: |
           chmod +x gradlew
           if grep -q "^reactNativeArchitectures=" gradle.properties; then
@@ -78,6 +79,7 @@ jobs:
 
       - name: Sign preview APK
         working-directory: apps/collect/android
+        shell: bash
         run: |
           release_dir="app/build/outputs/apk/release"
           input_apk="$(find "$release_dir" -maxdepth 1 -type f -name "*.apk" | sort | head -n 1)"
@@ -115,6 +117,7 @@ jobs:
 
       - name: Report preview binary
         working-directory: apps/collect
+        shell: bash
         run: |
           echo "Standalone preview APK: android/app/build/outputs/apk/release/MkulimaCollect-preview.apk"
           echo "expo-dev-client included in preview binary: no"

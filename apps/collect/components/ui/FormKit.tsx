@@ -178,6 +178,15 @@ export function SecondaryButton({ label, onPress, disabled }: { label: string; o
   );
 }
 
+export function FooterActions({ secondary, primary }: { secondary?: ReactNode; primary: ReactNode }) {
+  return (
+    <View style={styles.footerActions}>
+      {secondary ? <View style={styles.footerSecondary}>{secondary}</View> : null}
+      <View style={styles.footerPrimary}>{primary}</View>
+    </View>
+  );
+}
+
 export function DataRow({ label, value, tone = "default" }: { label: string; value: string; tone?: FieldTone }) {
   return (
     <View style={styles.dataRow}>
@@ -443,6 +452,17 @@ const styles = StyleSheet.create({
   },
   secondaryDisabledText: {
     color: Colors.charcoal300,
+  },
+  footerActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  footerSecondary: {
+    flex: 1,
+  },
+  footerPrimary: {
+    flex: 1.4,
   },
   dataRow: {
     borderBottomColor: Colors.charcoal100,
