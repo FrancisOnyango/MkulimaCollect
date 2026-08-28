@@ -3,10 +3,13 @@ name: Build MkulimaCollect Preview APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   android-preview-apk:
     name: Android standalone preview APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     env:
       CI: true
