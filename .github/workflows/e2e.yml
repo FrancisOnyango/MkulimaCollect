@@ -2,11 +2,6 @@ name: E2E Tests
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, master]
-    paths:
-      - ".github/workflows/e2e.yml"
-      - "apps/collect/**"
 
 jobs:
   mobile-flow-smoke:
