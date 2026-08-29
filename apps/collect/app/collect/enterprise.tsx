@@ -1,28 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { ChoiceGroup, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader } from "@/components/ui/FormKit";
-import { SectorId, type SectorIdValue } from "@/constants/sectorIds";
+import { ChoiceGroup, DataRow, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader } from "@/components/ui/FormKit";
+import { type SectorIdValue } from "@/constants/sectorIds";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { createEnterprise } from "@/features/enterprises/enterpriseRepository";
-
-const sectors: { id: SectorIdValue; label: string; group: string }[] = [
-  { id: SectorId.DAIRY, label: "Dairy", group: "Livestock" },
-  { id: SectorId.POULTRY, label: "Poultry", group: "Livestock" },
-  { id: SectorId.LIVESTOCK_MEAT, label: "Livestock meat", group: "Livestock" },
-  { id: SectorId.AQUACULTURE, label: "Aquaculture", group: "Livestock" },
-  { id: SectorId.MAIZE, label: "Maize", group: "Annual crops" },
-  { id: SectorId.RICE, label: "Rice", group: "Annual crops" },
-  { id: SectorId.IRISH_POTATO, label: "Irish potato", group: "Annual crops" },
-  { id: SectorId.BEANS, label: "Beans", group: "Annual crops" },
-  { id: SectorId.TOMATO, label: "Tomato", group: "Horticulture" },
-  { id: SectorId.HORTICULTURE, label: "Horticulture", group: "Horticulture" },
-  { id: SectorId.TEA, label: "Tea", group: "Perennial crops" },
-  { id: SectorId.COFFEE, label: "Coffee", group: "Perennial crops" },
-  { id: SectorId.AVOCADO, label: "Avocado", group: "Perennial crops" },
-  { id: SectorId.MACADAMIA, label: "Macadamia", group: "Perennial crops" },
-];
-
-const groups = ["Livestock", "Annual crops", "Horticulture", "Perennial crops"] as const;
+import { defaultSectorGroup, defaultSectorId, getSectorMeta, getSectorsByGroup, sectorGroups, type SectorGroupId } from "@/features/sectors/catalog";
 
 export default function EnterpriseStep() {
   const db = useDatabase();
@@ -30,11 +12,12 @@ export default function EnterpriseStep() {
   const farmerId = params.farmerId ?? "";
   const farmId = params.farmId ?? "";
   const dependsOn = params.dependsOn ? [params.dependsOn] : [];
-  const [group, setGroup] = useState<(typeof groups)[number]>("Livestock");
-  const [sector, setSector] = useState<SectorIdValue>(SectorId.DAIRY);
+  const [group, setGroup] = useState<SectorGroupId>(defaultSectorGroup);
+  const [sector, setSector] = useState<SectorIdValue>(defaultSectorId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const visibleSectors = sectors.filter((item) => item.group === group);
+  const visibleSectors = useMemo(() => getSectorsByGroup(group), [group]);
+  const selectedSector = getSectorMeta(sector);
 
   async function handleContinue() {
     if (!farmerId || !farmId) {
@@ -62,28 +45,49 @@ export default function EnterpriseStep() {
   }
 
   return (
-    <FormScreen footer={<PrimaryButton label="Open sector form" loading={saving} onPress={handleContinue} />}>
+    <FormScreen footer={<PrimaryButton label="Open selected sector form" loading={saving} onPress={handleContinue} />}>
       <StepHeader
         eyebrow="Enterprise profile"
-        title="Select production sector"
-        description="MkulimaCollect supports multiple agricultural sectors. Choose the enterprise that should feed this farmer's MkulimaScore profile."
+        title="Select the farmer's production sector"
+        description="Choose the enterprise that should feed this farmer's MkulimaScore profile. The next screen loads a versioned form for that specific sector."
         step={5}
         total={8}
       />
 
-      <SectionCard title="Sector family" description="Group sectors by business model so agents can find the right form quickly.">
-        <ChoiceGroup label="Enterprise group" value={group} options={groups} onChange={(value) => {
-          const nextGroup = value as (typeof groups)[number];
-          setGroup(nextGroup);
-          setSector(sectors.find((item) => item.group === nextGroup)?.id ?? SectorId.DAIRY);
-        }} required />
+      <SectionCard title="Sector family" description="Start with the business family, then choose the exact enterprise being assessed.">
+        <ChoiceGroup
+          label="Enterprise group"
+          value={group}
+          options={sectorGroups}
+          onChange={(value) => {
+            const nextGroup = value as SectorGroupId;
+            const firstSector = getSectorsByGroup(nextGroup)[0]?.id ?? defaultSectorId;
+            setGroup(nextGroup);
+            setSector(firstSector);
+          }}
+          required
+        />
       </SectionCard>
 
-      <SectionCard title="Enterprise sector" description="The next screen loads a versioned schema with production, market, costs, and evidence prompts for the selected sector.">
-        <ChoiceGroup label="Sector" value={sector} options={visibleSectors.map((item) => ({ label: item.label, value: item.id }))} onChange={(value) => setSector(value as SectorIdValue)} required />
+      <SectionCard title="Enterprise sector" description="Each selection controls the route, schema, evidence prompts, and scoring context.">
+        <ChoiceGroup
+          label="Sector"
+          value={sector}
+          options={visibleSectors.map((item) => ({ label: item.label, value: item.id }))}
+          onChange={(value) => setSector(value as SectorIdValue)}
+          required
+        />
       </SectionCard>
 
-      <Notice title="Not dairy-only" message="Dairy is one supported sector. Crop, livestock, horticulture, aquaculture, and perennial crop forms are available from the same intake flow." tone="success" />
+      <SectionCard title="Selected route" description={selectedSector.description}>
+        <DataRow label="Sector" value={selectedSector.label} />
+        <DataRow label="Family" value={selectedSector.group} />
+        <DataRow label="MkulimaScore path" value={selectedSector.scorePath} />
+        <DataRow label="Collection route" value={`/collect/${selectedSector.id}`} tone="success" />
+        <DataRow label="Evidence set" value={selectedSector.evidenceCategories.slice(0, 3).join(", ")} />
+      </SectionCard>
+
+      <Notice title="Multi-sector intake active" message="The collection workflow now routes by the selected sector. Dairy remains available under livestock, but it is no longer the default operating assumption." tone="success" />
       {error ? <Notice title={error} tone="danger" /> : null}
     </FormScreen>
   );

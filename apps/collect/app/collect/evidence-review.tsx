@@ -5,14 +5,16 @@ import { Colors } from "@/constants/colors";
 import { DataRow, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader } from "@/components/ui/FormKit";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { getEvidenceByFarmer } from "@/features/evidence/evidenceRepository";
+import { getSectorMeta } from "@/features/sectors/catalog";
 import { type evidence } from "@/lib/db/schema";
 
 type EvidenceRow = typeof evidence.$inferSelect;
 
 export default function EvidenceReviewStep() {
   const db = useDatabase();
-  const params = useLocalSearchParams<{ farmerId?: string; farmId?: string; enterpriseId?: string }>();
+  const params = useLocalSearchParams<{ farmerId?: string; farmId?: string; enterpriseId?: string; sector?: string }>();
   const [items, setItems] = useState<EvidenceRow[]>([]);
+  const sectorMeta = getSectorMeta(params.sector ?? "");
 
   useEffect(() => {
     if (params.farmerId) {
@@ -32,6 +34,7 @@ export default function EvidenceReviewStep() {
 
       <SectionCard title="Evidence summary" description="Profiles can be submitted without every optional attachment, but evidence improves backend verification confidence.">
         <DataRow label="Attached items" value={`${items.length}`} tone={items.length ? "success" : "warning"} />
+        <DataRow label="Sector context" value={sectorMeta.label} />
         <DataRow label="Storage mode" value="Local encrypted device storage" />
         <DataRow label="Upload mode" value="Pre-signed evidence flow" />
       </SectionCard>
@@ -39,7 +42,7 @@ export default function EvidenceReviewStep() {
       <View style={styles.listHeader}>
         <Text style={styles.listTitle}>Attachments</Text>
         {params.farmerId ? (
-          <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/evidence/capture", params })} style={styles.addButton}>
+          <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/evidence/capture", params: { ...params, category: sectorMeta.evidenceCategories[0] } })} style={styles.addButton}>
             <Text style={styles.addButtonText}>Add evidence</Text>
           </Pressable>
         ) : null}
@@ -49,7 +52,7 @@ export default function EvidenceReviewStep() {
         scrollEnabled={false}
         data={items}
         keyExtractor={(item) => item.id}
-        ListEmptyComponent={<Notice title="No evidence attached yet" message="Add farmer ID, farm photos, delivery records, payment statements, or input receipts when available." tone="warning" />}
+        ListEmptyComponent={<Notice title="No evidence attached yet" message={`Add ${sectorMeta.evidenceCategories.slice(0, 4).join(", ")} when available for this sector.`} tone="warning" />}
         renderItem={({ item }) => (
           <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/evidence/[evidenceId]", params: { evidenceId: item.id } })} style={styles.card}>
             <Text style={styles.title}>{item.category}</Text>

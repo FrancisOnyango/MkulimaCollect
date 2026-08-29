@@ -1,19 +1,22 @@
 import { useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { ChoiceGroup, FormScreen, Notice, PrimaryButton, SecondaryButton, SectionCard, StepHeader, TextField, ToggleRow } from "@/components/ui/FormKit";
+import { ChoiceGroup, DataRow, FormScreen, Notice, PrimaryButton, SecondaryButton, SectionCard, StepHeader, TextField, ToggleRow } from "@/components/ui/FormKit";
+import { Colors } from "@/constants/colors";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { saveExpense, saveProductionObservation } from "@/features/production/productionRepository";
-import { getSectorSchema } from "@/features/sectors/dairySchema";
+import { defaultSectorId, getSectorMeta } from "@/features/sectors/catalog";
+import { getSectorSchema } from "@/features/sectors/sectorSchemas";
 import type { SectorField } from "@/features/sectors/types";
 
 type FormValue = string | boolean | string[];
 
 export default function SectorCollectionScreen() {
   const db = useDatabase();
-  const params = useLocalSearchParams<{ sector?: string; enterpriseId?: string; farmerId?: string }>();
-  const sector = params.sector ?? "dairy";
+  const params = useLocalSearchParams<{ sector?: string; enterpriseId?: string; farmerId?: string; farmId?: string; dependsOn?: string }>();
+  const sector = params.sector ?? defaultSectorId;
   const schema = useMemo(() => getSectorSchema(sector), [sector]);
+  const sectorMeta = useMemo(() => getSectorMeta(schema.sector), [schema.sector]);
   const [sectionIndex, setSectionIndex] = useState(0);
   const [values, setValues] = useState<Record<string, FormValue>>({});
   const [saving, setSaving] = useState(false);
@@ -69,7 +72,7 @@ export default function SectorCollectionScreen() {
       if (typeof nextSectionIndex === "number") {
         setSectionIndex(nextSectionIndex);
       } else {
-        router.replace({ pathname: "/collect/evidence-review", params: { farmerId: params.farmerId, enterpriseId: params.enterpriseId } });
+        router.replace({ pathname: "/collect/evidence-review", params: { farmerId: params.farmerId, farmId: params.farmId, enterpriseId: params.enterpriseId, sector: schema.sector } });
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save production response");
@@ -100,10 +103,32 @@ export default function SectorCollectionScreen() {
       <StepHeader
         eyebrow={`Schema ${schema.id} v${schema.version}`}
         title={schema.title}
-        description="Capture production, market, cost, health, asset, and evidence signals for this enterprise. Required fields are validated before each section is saved offline."
+        description={`${sectorMeta.label} routes to ${sectorMeta.scorePath}. Capture production, market, cost, asset, and evidence signals for this enterprise.`}
         step={sectionIndex + 1}
         total={schema.sections.length}
       />
+
+      <SectionCard title="Sector routing" description={sectorMeta.description}>
+        <DataRow label="Current route" value={`/collect/${schema.sector}`} tone="success" />
+        <DataRow label="Evidence categories" value={sectorMeta.evidenceCategories.slice(0, 3).join(", ")} />
+        <View style={styles.sectionTabs}>
+          {schema.sections.map((item, index) => (
+            <Pressable
+              accessibilityRole="button"
+              disabled={saving}
+              key={item.id}
+              onPress={() => {
+                if (index <= sectionIndex) {
+                  setSectionIndex(index);
+                }
+              }}
+              style={[styles.sectionTab, index === sectionIndex ? styles.sectionTabActive : index < sectionIndex ? styles.sectionTabDone : null]}
+            >
+              <Text style={[styles.sectionTabText, index === sectionIndex ? styles.sectionTabTextActive : null]} numberOfLines={1}>{item.title}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </SectionCard>
 
       <SectionCard title={section.title} description={sectionDescription(section.id)}>
         {section.fields.filter((field) => isVisible(field, values)).map((field) => (
@@ -207,5 +232,37 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+  },
+  sectionTabs: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+  },
+  sectionTab: {
+    backgroundColor: Colors.brandMuted,
+    borderColor: Colors.charcoal100,
+    borderRadius: 8,
+    borderWidth: 1,
+    maxWidth: "48%",
+    minHeight: 38,
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  sectionTabActive: {
+    backgroundColor: Colors.brandLight,
+    borderColor: Colors.brand,
+  },
+  sectionTabDone: {
+    borderColor: Colors.brandMid,
+  },
+  sectionTabText: {
+    color: Colors.charcoal700,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  sectionTabTextActive: {
+    color: Colors.brandDark,
   },
 });
