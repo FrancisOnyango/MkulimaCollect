@@ -86,6 +86,6 @@ const titleStyle = { color: Colors.brand, fontSize: 26, fontWeight: "700" as con
 const sectionTitleStyle = { color: Colors.charcoal, fontSize: 17, fontWeight: "700" as const };
 const mutedStyle = { color: Colors.charcoal500, marginTop: 6 };
 const rowStyle = { color: Colors.charcoal700, marginTop: 8 };
-const cardStyle = { backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginTop: 14 };
+const cardStyle = { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginTop: 14 };
 const buttonStyle = { backgroundColor: Colors.brandLight, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, marginTop: 10 };
 const buttonTextStyle = { color: Colors.brandDark, fontWeight: "700" as const };

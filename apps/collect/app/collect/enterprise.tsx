@@ -1,10 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { ChoiceGroup, DataRow, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader } from "@/components/ui/FormKit";
+import { Colors } from "@/constants/colors";
 import { type SectorIdValue } from "@/constants/sectorIds";
+import { DataRow, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader } from "@/components/ui/FormKit";
 import { useDatabase } from "@/components/providers/DBProvider";
-import { createEnterprise } from "@/features/enterprises/enterpriseRepository";
-import { defaultSectorGroup, defaultSectorId, getSectorMeta, getSectorsByGroup, sectorGroups, type SectorGroupId } from "@/features/sectors/catalog";
+import { createEnterprise, getEnterprisesByFarm } from "@/features/enterprises/enterpriseRepository";
+import { upsertCollectionSession } from "@/features/farmers/collectionSessionRepository";
+import { getFarmById } from "@/features/farms/farmRepository";
+import { getSectorMeta, sectorCatalog } from "@/features/sectors/catalog";
 
 export default function EnterpriseStep() {
   const db = useDatabase();
@@ -12,12 +16,28 @@ export default function EnterpriseStep() {
   const farmerId = params.farmerId ?? "";
   const farmId = params.farmId ?? "";
   const dependsOn = params.dependsOn ? [params.dependsOn] : [];
-  const [group, setGroup] = useState<SectorGroupId>(defaultSectorGroup);
-  const [sector, setSector] = useState<SectorIdValue>(defaultSectorId);
+  const [farmName, setFarmName] = useState("This farm");
+  const [existingSectors, setExistingSectors] = useState<string[]>([]);
+  const [selected, setSelected] = useState<SectorIdValue[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const visibleSectors = useMemo(() => getSectorsByGroup(group), [group]);
-  const selectedSector = getSectorMeta(sector);
+
+  useEffect(() => {
+    if (!farmId) {
+      return;
+    }
+
+    void Promise.all([getFarmById(db, farmId), getEnterprisesByFarm(db, farmId)]).then(([farm, enterprises]) => {
+      if (farm?.name) {
+        setFarmName(farm.name);
+      }
+      setExistingSectors(enterprises.map((enterprise) => enterprise.sector));
+    });
+  }, [db, farmId]);
+
+  function toggle(sector: SectorIdValue) {
+    setSelected((current) => current.includes(sector) ? current.filter((item) => item !== sector) : [...current, sector]);
+  }
 
   async function handleContinue() {
     if (!farmerId || !farmId) {
@@ -25,70 +45,123 @@ export default function EnterpriseStep() {
       return;
     }
 
+    const toCreate = selected.filter((sector) => !existingSectors.includes(sector));
+    if (!toCreate.length) {
+      setError("Select at least one new enterprise for this farm.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
     try {
-      const { enterpriseId, operationUuid } = await createEnterprise(db, {
+      const createdIds: string[] = [];
+      let firstEnterpriseId = "";
+      let firstSector: SectorIdValue | undefined;
+      let lastDepends = params.dependsOn;
+
+      for (const sector of toCreate) {
+        const { enterpriseId, operationUuid } = await createEnterprise(db, {
+          farmerId,
+          farmId,
+          sector,
+          dependsOn: lastDepends ? [lastDepends] : dependsOn,
+        });
+        lastDepends = operationUuid;
+        createdIds.push(enterpriseId);
+        if (!firstEnterpriseId) {
+          firstEnterpriseId = enterpriseId;
+          firstSector = sector;
+        }
+      }
+
+      if (!firstSector || !firstEnterpriseId) {
+        throw new Error("Failed to create enterprises.");
+      }
+
+      await upsertCollectionSession(db, {
         farmerId,
         farmId,
-        sector,
-        dependsOn,
+        currentStep: "sector",
+        stepStates: { pendingEnterpriseIds: createdIds, currentEnterpriseId: firstEnterpriseId, currentSector: firstSector },
       });
 
-      router.push({ pathname: "/collect/[sector]", params: { sector, farmerId, farmId, enterpriseId, dependsOn: operationUuid } });
+      router.push({
+        pathname: "/collect/[sector]",
+        params: { sector: firstSector, farmerId, farmId, enterpriseId: firstEnterpriseId, dependsOn: lastDepends },
+      });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to save enterprise");
+      setError(caught instanceof Error ? caught.message : "Failed to save enterprises");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <FormScreen footer={<PrimaryButton label="Open selected sector form" loading={saving} onPress={handleContinue} />}>
+    <FormScreen footer={<PrimaryButton label={selected.length > 1 ? `Save ${selected.length} enterprises` : "Save enterprise and open form"} loading={saving} onPress={handleContinue} />}>
       <StepHeader
-        eyebrow="Enterprise profile"
-        title="Select the farmer's production sector"
-        description="Choose the enterprise that should feed this farmer's MkulimaScore profile. The next screen loads a versioned form for that specific sector."
-        step={5}
-        total={8}
+        eyebrow="Enterprises"
+        title={`What does ${farmName} produce?`}
+        description="A farm can run more than one enterprise. Select every value chain on this holding. Each one gets its own unique form."
+        step={6}
+        total={9}
       />
 
-      <SectionCard title="Sector family" description="Start with the business family, then choose the exact enterprise being assessed.">
-        <ChoiceGroup
-          label="Enterprise group"
-          value={group}
-          options={sectorGroups}
-          onChange={(value) => {
-            const nextGroup = value as SectorGroupId;
-            const firstSector = getSectorsByGroup(nextGroup)[0]?.id ?? defaultSectorId;
-            setGroup(nextGroup);
-            setSector(firstSector);
-          }}
-          required
-        />
+      <SectionCard title="This farm" description="Enterprises are stored against the selected farm, not the farmer as a whole.">
+        <DataRow label="Farm" value={farmName} />
+        <DataRow label="Already captured" value={existingSectors.length ? existingSectors.map((id) => getSectorMeta(id).label).join(", ") : "None yet"} />
       </SectionCard>
 
-      <SectionCard title="Enterprise sector" description="Each selection controls the route, schema, evidence prompts, and scoring context.">
-        <ChoiceGroup
-          label="Sector"
-          value={sector}
-          options={visibleSectors.map((item) => ({ label: item.label, value: item.id }))}
-          onChange={(value) => setSector(value as SectorIdValue)}
-          required
-        />
+      <SectionCard title="Add enterprises" description="Select one or many. You can return here from the holdings list to add more later.">
+        {sectorCatalog.map((sector) => {
+          const active = selected.includes(sector.id);
+          const already = existingSectors.includes(sector.id);
+          return (
+            <Pressable
+              accessibilityRole="button"
+              disabled={already}
+              key={sector.id}
+              onPress={() => toggle(sector.id)}
+              style={[styles.chip, active ? styles.chipActive : null, already ? styles.chipUsed : null]}
+            >
+              <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>{sector.label}</Text>
+              <Text style={styles.chipMeta}>{already ? "Already on this farm" : sector.group}</Text>
+            </Pressable>
+          );
+        })}
       </SectionCard>
 
-      <SectionCard title="Selected route" description={selectedSector.description}>
-        <DataRow label="Sector" value={selectedSector.label} />
-        <DataRow label="Family" value={selectedSector.group} />
-        <DataRow label="MkulimaScore path" value={selectedSector.scorePath} />
-        <DataRow label="Collection route" value={`/collect/${selectedSector.id}`} tone="success" />
-        <DataRow label="Evidence set" value={selectedSector.evidenceCategories.slice(0, 3).join(", ")} />
-      </SectionCard>
-
-      <Notice title="Multi-sector intake active" message="The collection workflow now routes by the selected sector. Dairy remains available under livestock, but it is no longer the default operating assumption." tone="success" />
       {error ? <Notice title={error} tone="danger" /> : null}
     </FormScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  chip: {
+    backgroundColor: Colors.card,
+    borderColor: Colors.charcoal100,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+    padding: 12,
+  },
+  chipActive: {
+    borderColor: Colors.brand,
+    backgroundColor: Colors.brandLight,
+  },
+  chipUsed: {
+    opacity: 0.55,
+  },
+  chipText: {
+    color: Colors.charcoal,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  chipTextActive: {
+    color: Colors.brand,
+  },
+  chipMeta: {
+    color: Colors.charcoal500,
+    marginTop: 4,
+  },
+});

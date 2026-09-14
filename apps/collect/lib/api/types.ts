@@ -78,6 +78,7 @@ export type PresignedUploadResult = {
 };
 
 export type SyncBatch = {
+  baselineCursor?: string | null;
   operations: {
     operationUuid: string;
     entityType: string;
@@ -89,15 +90,19 @@ export type SyncBatch = {
   }[];
 };
 
+export type SyncIssue = {
+  operationUuid: string;
+  code: string;
+  message: string;
+};
+
 export type SyncBatchResult = {
   accepted: {
     operationUuid: string;
     serverId: string;
     serverVersion: number;
   }[];
-  rejected: {
-    operationUuid: string;
-    code: string;
-    message: string;
-  }[];
+  rejected: SyncIssue[];
+  conflicts?: SyncIssue[];
+  serverCursor?: string | null;
 };

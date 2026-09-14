@@ -44,7 +44,7 @@ export default function BottomNav({ activeTab, onTabChange, onCollect }: BottomN
         aria-label={label}
         aria-pressed={active}
         onClick={() => onTabChange(id)}
-        className={`flex flex-col items-center gap-1 flex-1 py-2 transition-colors ${active ? "text-brand" : "text-charcoal-300"}`}
+        className={`flex flex-col items-center gap-0.5 flex-1 py-1 transition-colors ${active ? "text-brand" : "text-charcoal-300"}`}
       >
         <Icon />
         <span className="text-[10px] font-medium tracking-wide">{label}</span>
@@ -53,27 +53,27 @@ export default function BottomNav({ activeTab, onTabChange, onCollect }: BottomN
   }
 
   return (
-    <div className="flex items-center bg-white border-t border-charcoal-100 pb-safe">
-      {tab("home", HomeIcon, "Home")}
-      {tab("farmers", FarmersIcon, "Farmers")}
+    <div className="absolute bottom-3 left-3 right-3 z-20">
+      <div className="flex items-center bg-white/90 backdrop-blur-md border border-charcoal-100 rounded-full px-1.5 py-1.5 shadow-[0_12px_40px_rgba(13,27,16,0.08)]">
+        {tab("home", HomeIcon, "Home")}
+        {tab("farmers", FarmersIcon, "Farmers")}
 
-      {/* Collect FAB */}
-      <div className="flex flex-col items-center flex-1 -mt-5">
-        <button
-          type="button"
-          aria-label="Collect"
-          onClick={onCollect}
-          className="w-14 h-14 rounded-full bg-brand flex items-center justify-center shadow-lg shadow-brand/30 active:scale-95 transition-transform"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
-        <span className="text-[10px] font-medium text-charcoal-300 mt-1">Collect</span>
+        <div className="flex flex-col items-center px-1">
+          <button
+            type="button"
+            aria-label="Collect"
+            onClick={onCollect}
+            className="w-12 h-12 rounded-full bg-brand flex items-center justify-center active:scale-95"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        </div>
+
+        {tab("tasks", TasksIcon, "Tasks")}
+        {tab("more", MoreIcon, "More")}
       </div>
-
-      {tab("tasks", TasksIcon, "Tasks")}
-      {tab("more", MoreIcon, "More")}
     </div>
   )
 }

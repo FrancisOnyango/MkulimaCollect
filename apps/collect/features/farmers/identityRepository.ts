@@ -72,7 +72,17 @@ export async function saveIdentity(db: AppDatabase, input: SaveIdentityInput): P
       mutationType: existing ? "UPDATE" : "CREATE",
       payload: {
         farmerLocalUuid: input.farmerId,
-        ...input,
+        fullLegalName: input.fullLegalName,
+        firstName: input.firstName,
+        middleName: input.middleName,
+        surname: input.surname,
+        preferredName: input.preferredName,
+        nationalIdType: input.nationalIdType,
+        nationalIdHash: input.nationalIdHash,
+        nationalIdLast3: input.nationalIdLast3,
+        primaryPhoneHash: input.primaryPhoneHash,
+        primaryPhoneLast4: input.primaryPhoneLast4,
+        preferredLanguage: input.preferredLanguage,
       },
       dependsOn: input.dependsOn ?? [],
     });

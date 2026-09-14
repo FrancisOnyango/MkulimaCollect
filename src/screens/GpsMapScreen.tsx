@@ -1,219 +1,259 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import {
+  buildBoundary,
+  haversineMeters,
+  perimeterMeters,
+  projectPoints,
+  readFarmBoundary,
+  writeFarmBoundary,
+  type BoundaryPoint,
+} from "../farmBoundary"
+import { isGpsAccurate, MAX_GPS_ACCURACY_M } from "../gpsAccuracy"
+import { farmsFromDraft, persistFarms } from "../farmerHoldings"
 
 interface GpsMapScreenProps {
+  farmId?: string
   onBack: () => void
   onSave: () => void
 }
 
-const POLYGON_POINTS = [
-  { x: 140, y: 220 },
-  { x: 200, y: 180 },
-  { x: 255, y: 195 },
-  { x: 280, y: 240 },
-  { x: 268, y: 295 },
-  { x: 230, y: 330 },
-  { x: 175, y: 320 },
-  { x: 138, y: 285 },
-  { x: 130, y: 250 },
-]
-
-export default function GpsMapScreen({ onBack, onSave }: GpsMapScreenProps) {
-  const [mode, setMode] = useState<"idle" | "walking" | "done">("idle")
-  const [points, setPoints] = useState(0)
+export default function GpsMapScreen({ farmId, onBack, onSave }: GpsMapScreenProps) {
+  const existing = readFarmBoundary(farmId)
+  const [mode, setMode] = useState<"idle" | "walking" | "done">(existing ? "done" : "idle")
+  const [points, setPoints] = useState<BoundaryPoint[]>(existing?.points ?? [])
+  const [current, setCurrent] = useState<BoundaryPoint | null>(existing?.points.at(-1) ?? null)
+  const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const watchId = useRef<number | null>(null)
+
+  const stopWatch = () => {
+    if (watchId.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchId.current)
+      watchId.current = null
+    }
+  }
+
+  useEffect(() => () => stopWatch(), [])
+
+  const toPoint = (coords: GeolocationCoordinates): BoundaryPoint => ({
+    lat: coords.latitude,
+    lng: coords.longitude,
+    accuracy: coords.accuracy ?? null,
+    at: new Date().toISOString(),
+  })
+
+  const addPoint = (next: BoundaryPoint, force = false) => {
+    if (!isGpsAccurate(next.accuracy)) {
+      setError(`GPS accuracy must be ${MAX_GPS_ACCURACY_M} m or better. Wait and recapture.`)
+      return
+    }
+    setCurrent(next)
+    setPoints(existingPoints => {
+      const last = existingPoints[existingPoints.length - 1]
+      if (!force && last && haversineMeters(last, next) < 4) {
+        return existingPoints
+      }
+      return [...existingPoints, next]
+    })
+  }
+
+  const captureOnce = (force = true) => {
+    if (!navigator.geolocation) {
+      setError("This browser cannot capture GPS.")
+      return
+    }
+
+    setError(null)
+    navigator.geolocation.getCurrentPosition(
+      position => addPoint(toPoint(position.coords), force),
+      () => setError("Allow location access to walk the farm boundary."),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    )
+  }
 
   const startWalk = () => {
+    if (!navigator.geolocation) {
+      setError("This browser cannot capture GPS.")
+      return
+    }
+
+    setError(null)
+    setPoints([])
     setMode("walking")
-    let count = 0
-    const interval = setInterval(() => {
-      count++
-      setPoints(count)
-      if (count >= POLYGON_POINTS.length) {
-        clearInterval(interval)
-        setMode("done")
-      }
-    }, 600)
+    captureOnce(true)
+    watchId.current = navigator.geolocation.watchPosition(
+      position => addPoint(toPoint(position.coords), false),
+      () => setError("Location updates were blocked. Add points manually while you walk."),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    )
+  }
+
+  const finishWalk = () => {
+    stopWatch()
+    if (points.length < 3) {
+      setError("Walk or add at least 3 GPS points before closing the boundary.")
+      setMode("walking")
+      return
+    }
+    setMode("done")
   }
 
   const handleSave = () => {
+    if (points.length < 3) {
+      setError("A saved boundary needs at least 3 GPS points.")
+      return
+    }
+
+    const boundary = buildBoundary(points)
+    writeFarmBoundary(boundary, farmId)
+    if (farmId) {
+      persistFarms(farmsFromDraft().map(farm => farm.id === farmId ? { ...farm, boundary } : farm), farmId)
+    }
     setSaved(true)
-    setTimeout(onSave, 1200)
+    setTimeout(onSave, 900)
   }
 
-  const polyStr = POLYGON_POINTS.slice(0, Math.max(2, points))
-    .map(p => `${p.x},${p.y}`)
-    .join(" ")
+  const boundary = points.length >= 3 ? buildBoundary(points) : null
+  const projected = projectPoints(current ? [...points, current] : points)
+  const path = projectPoints(points)
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden screen-enter bg-charcoal">
-      {/* Top bar */}
-      <div className="absolute top-0 left-0 right-0 z-20 pt-12 px-4 pb-3 bg-gradient-to-b from-black/40 to-transparent">
+    <div className="flex-1 flex flex-col overflow-hidden bg-surface">
+      <div className="absolute top-0 left-0 right-0 z-20 pt-6 px-4 pb-3 bg-surface/80 backdrop-blur">
         <div className="flex items-center justify-between">
-          <button onClick={onBack} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 backdrop-blur">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+          <button type="button" onClick={onBack} className="w-9 h-9 flex items-center justify-center rounded-full bg-card border border-charcoal-100">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
           </button>
           <div className="text-center">
-            <p className="text-white font-semibold text-sm">Map farm</p>
-            <p className="text-white/60 text-xs">Kiariga Main Farm</p>
+            <p className="text-charcoal font-semibold text-sm">Map farm</p>
+            <p className="text-charcoal-500 text-xs">Walk the perimeter</p>
           </div>
-          <div className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 backdrop-blur">
-            <span className="w-2 h-2 rounded-full bg-brand" />
+          <div className="w-9 h-9 flex items-center justify-center rounded-full bg-card border border-charcoal-100">
+            <span className={`w-2 h-2 rounded-full ${mode === "walking" ? "bg-brand" : "bg-charcoal-300"}`} />
           </div>
         </div>
       </div>
 
-      {/* Map view */}
       <div className="flex-1 relative map-bg overflow-hidden">
         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 390 500" preserveAspectRatio="xMidYMid slice">
-          {/* Terrain features */}
-          <ellipse cx="100" cy="150" rx="80" ry="50" fill="rgba(139,167,109,0.3)" />
-          <ellipse cx="300" cy="350" rx="60" ry="40" fill="rgba(101,135,79,0.2)" />
-          <path d="M0,300 Q50,280 100,300 Q150,320 200,300 Q250,280 300,295 Q350,310 390,300" stroke="rgba(70,130,180,0.4)" strokeWidth="3" fill="none" />
-          <text x="60" y="155" fontSize="9" fill="rgba(30,60,20,0.5)" fontFamily="monospace">Pasture</text>
-          <text x="255" y="355" fontSize="9" fill="rgba(30,60,20,0.5)" fontFamily="monospace">Brush</text>
-          <text x="120" y="295" fontSize="9" fill="rgba(70,130,180,0.6)" fontFamily="monospace">Stream</text>
+          <ellipse cx="100" cy="150" rx="80" ry="50" fill="rgba(132,215,119,0.28)" />
+          <ellipse cx="300" cy="350" rx="60" ry="40" fill="rgba(84,197,41,0.16)" />
 
-          {/* Farm polygon */}
-          {points >= 2 && (
-            <>
-              <polygon
-                points={POLYGON_POINTS.slice(0, points).map(p => `${p.x},${p.y}`).join(" ")}
-                fill="rgba(26,92,53,0.18)"
-                stroke="#1A5C35"
-                strokeWidth="2.5"
-                strokeLinejoin="round"
-                strokeDasharray={mode === "walking" ? "6,4" : "none"}
-              />
-              {mode === "done" && (
-                <polygon
-                  points={POLYGON_POINTS.map(p => `${p.x},${p.y}`).join(" ")}
-                  fill="rgba(26,92,53,0.12)"
-                  stroke="#1A5C35"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
-                />
-              )}
-            </>
+          {path.length >= 2 && (
+            <polygon
+              points={path.map(point => `${point.x},${point.y}`).join(" ")}
+              fill="rgba(84,197,41,0.16)"
+              stroke="#54C529"
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+              strokeDasharray={mode === "walking" ? "6,4" : "none"}
+            />
           )}
 
-          {/* Boundary points */}
-          {POLYGON_POINTS.slice(0, points).map((p, i) => (
-            <g key={i}>
-              <circle cx={p.x} cy={p.y} r="6" fill="white" stroke="#1A5C35" strokeWidth="2.5" />
-              <circle cx={p.x} cy={p.y} r="2.5" fill="#1A5C35" />
+          {path.map((point, index) => (
+            <g key={`${point.x}-${index}`}>
+              <circle cx={point.x} cy={point.y} r="6" fill="white" stroke="#54C529" strokeWidth="2.5" />
+              <circle cx={point.x} cy={point.y} r="2.5" fill="#54C529" />
             </g>
           ))}
 
-          {/* Current position marker */}
-          <g>
-            <circle cx="205" cy="255" r="18" fill="rgba(26,92,53,0.15)" />
-            <circle cx="205" cy="255" r="8" fill="#1A5C35" stroke="white" strokeWidth="3" />
-            <circle cx="205" cy="255" r="4" fill="white" />
-          </g>
+          {projected[projected.length - 1] && (
+            <g>
+              <circle cx={projected[projected.length - 1].x} cy={projected[projected.length - 1].y} r="18" fill="rgba(84,197,41,0.18)" />
+              <circle cx={projected[projected.length - 1].x} cy={projected[projected.length - 1].y} r="8" fill="#54C529" stroke="white" strokeWidth="3" />
+              <circle cx={projected[projected.length - 1].x} cy={projected[projected.length - 1].y} r="4" fill="white" />
+            </g>
+          )}
         </svg>
 
-        {/* Walking status overlay */}
         {mode === "walking" && (
-          <div className="absolute top-24 left-4 right-4 bg-white/95 backdrop-blur rounded-2xl p-3.5 shadow-lg">
+          <div className="absolute top-24 left-4 right-4 bg-card/95 backdrop-blur rounded-[22px] p-3.5 border border-charcoal-100">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-brand pulse-dot" />
               <span className="text-xs font-semibold text-charcoal">Boundary recording</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
-              <Stat label="Points" value={String(points)} />
-              <Stat label="Distance" value={`${points * 51} m`} />
-              <Stat label="Accuracy" value="±4 m" />
+              <Stat label="Points" value={String(points.length)} />
+              <Stat label="Distance" value={`${points.length >= 2 ? Math.round(perimeterMeters(points)) : 0} m`} />
+              <Stat label="Accuracy" value={current?.accuracy ? `±${Math.round(current.accuracy)} m` : "—"} />
             </div>
+            {current && (
+              <p className="text-[11px] font-mono text-charcoal-400 mt-2">{current.lat.toFixed(6)}, {current.lng.toFixed(6)}</p>
+            )}
           </div>
         )}
 
-        {/* Done overlay */}
-        {mode === "done" && !saved && (
-          <div className="absolute top-24 left-4 right-4 bg-white/95 backdrop-blur rounded-2xl p-3.5 shadow-lg">
+        {mode === "done" && !saved && boundary && (
+          <div className="absolute top-24 left-4 right-4 bg-card/95 backdrop-blur rounded-[22px] p-3.5 border border-charcoal-100">
             <div className="flex items-center gap-2 mb-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A5C35" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#54C529" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               <span className="text-xs font-semibold text-brand">Boundary captured</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center mb-3">
-              <Stat label="Points" value="9" />
-              <Stat label="Distance" value="463 m" />
-              <Stat label="Accuracy" value="±4 m" />
+              <Stat label="Points" value={String(boundary.points.length)} />
+              <Stat label="Distance" value={`${boundary.distanceM} m`} />
+              <Stat label="Accuracy" value={current?.accuracy ? `±${Math.round(current.accuracy)} m` : "—"} />
             </div>
             <div className="bg-brand-muted border border-brand/10 rounded-xl px-3 py-2">
               <div className="flex justify-between">
                 <span className="text-xs text-charcoal-500">GPS measured area</span>
-                <span className="text-sm font-semibold font-mono text-brand">2.38 acres</span>
-              </div>
-              <div className="flex justify-between mt-1">
-                <span className="text-xs text-charcoal-500">Farmer reported</span>
-                <span className="text-xs font-mono text-charcoal">2.5 acres</span>
-              </div>
-              <div className="flex justify-between mt-1">
-                <span className="text-xs text-charcoal-400">Variance</span>
-                <span className="text-xs font-mono text-amber-field">−4.8% — confirm with farmer</span>
+                <span className="text-sm font-semibold font-mono text-brand">{boundary.acres} acres</span>
               </div>
             </div>
           </div>
         )}
 
-        {saved && (
-          <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-brand-light flex items-center justify-center">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#1A5C35" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        {saved && boundary && (
+          <div className="absolute inset-0 bg-surface/90 flex flex-col items-center justify-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-brand flex items-center justify-center">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
             <div className="text-center">
               <p className="text-xl font-semibold text-charcoal">Farm mapped</p>
-              <p className="text-charcoal-500 text-sm mt-1">2.38 acres · 9 boundary points</p>
-              <p className="text-brand text-xs font-medium mt-1">GPS accuracy: Good</p>
+              <p className="text-charcoal-500 text-sm mt-1">{boundary.acres} acres · {boundary.points.length} boundary points</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Bottom panel */}
       {!saved && (
-        <div className="bg-white px-4 py-5">
+        <div className="bg-card px-4 py-5 border-t border-charcoal-100">
+          {error && <p className="text-xs text-red-field mb-3">{error}</p>}
+
           {mode === "idle" && (
-            <div className="flex flex-col gap-2.5">
-              <button
-                onClick={startWalk}
-                className="w-full py-4 bg-brand text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                  <circle cx="12" cy="5" r="1"/><path d="M9 20l-1-4 3-3 1-5M15.5 20l-1.5-5-2-2"/><path d="M7 10l-2 1-1 4"/>
-                </svg>
+            <div className="flex gap-2">
+              <button type="button" onClick={onBack} className="flex-1 py-3.5 border border-charcoal-200 rounded-full text-sm font-medium text-charcoal">
+                Cancel
+              </button>
+              <button type="button" onClick={startWalk} className="flex-[2] py-3.5 bg-brand text-brand-ink rounded-full font-semibold text-sm">
                 Walk boundary
               </button>
-              <div className="flex gap-2">
-                <button className="flex-1 py-3 border border-charcoal-200 rounded-xl text-sm font-medium text-charcoal">Draw boundary</button>
-                <button className="flex-1 py-3 border border-charcoal-200 rounded-xl text-sm font-medium text-charcoal">Capture point</button>
-              </div>
             </div>
           )}
 
           {mode === "walking" && (
-            <button
-              onClick={() => { setPoints(POLYGON_POINTS.length); setMode("done") }}
-              className="w-full py-4 bg-amber-500 text-white rounded-xl font-semibold text-sm active:scale-[0.98] transition-transform"
-            >
-              Stop recording
-            </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => captureOnce(true)} className="flex-1 py-3.5 border border-charcoal-200 rounded-full text-sm font-medium text-charcoal">
+                Add point
+              </button>
+              <button type="button" onClick={finishWalk} className="flex-[2] py-4 bg-amber-field text-brand-ink rounded-full font-semibold text-sm">
+                Stop recording
+              </button>
+            </div>
           )}
 
           {mode === "done" && (
             <div className="flex gap-2">
               <button
-                onClick={() => { setMode("idle"); setPoints(0) }}
-                className="flex-1 py-3.5 border border-charcoal-200 rounded-xl text-sm font-medium text-charcoal"
+                type="button"
+                onClick={() => { setMode("idle"); setPoints([]); setError(null) }}
+                className="flex-1 py-3.5 border border-charcoal-200 rounded-full text-sm font-medium text-charcoal"
               >
                 Redo
               </button>
-              <button
-                onClick={handleSave}
-                className="flex-[2] py-3.5 bg-brand text-white rounded-xl text-sm font-semibold active:scale-[0.98] transition-transform"
-              >
+              <button type="button" onClick={handleSave} className="flex-[2] py-3.5 bg-brand text-brand-ink rounded-full text-sm font-semibold">
                 Save polygon
               </button>
             </div>

@@ -1,6 +1,9 @@
 name: CI
 
 on:
+  pull_request:
+  push:
+    branches: [main, master]
   workflow_dispatch:
 
 jobs:
@@ -31,6 +34,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:ci
 
       - name: Validate Expo config
         run: npx expo config --type public

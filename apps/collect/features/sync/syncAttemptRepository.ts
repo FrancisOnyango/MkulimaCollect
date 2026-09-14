@@ -23,7 +23,7 @@ export async function startSyncAttempt(db: AppDatabase, entryUuid: string, attem
   return id;
 }
 
-export async function finishSyncAttempt(db: AppDatabase, id: string, state: "SYNCED" | "FAILED", errorMessage?: string): Promise<void> {
+export async function finishSyncAttempt(db: AppDatabase, id: string, state: "SYNCED" | "FAILED" | "CONFLICT", errorMessage?: string): Promise<void> {
   Sentry.addBreadcrumb({ category: 'sync', message: `finish-attempt ${id}`, data: { state, errorMessage } });
   recordMetric(state === 'SYNCED' ? 'sync.attempt.succeed' : 'sync.attempt.fail', 1);
 

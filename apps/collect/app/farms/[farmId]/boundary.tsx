@@ -5,7 +5,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { saveGeometry } from "@/features/farms/farmRepository";
+import { upsertCollectionSession } from "@/features/farmers/collectionSessionRepository";
+import { getFarmById, saveGeometry } from "@/features/farms/farmRepository";
+import { acresDiverge, assertGpsAccuracy, formatAccuracy } from "@/lib/gpsAccuracy";
 
 type BoundaryPoint = {
   latitude: number;
@@ -18,11 +20,12 @@ type BoundaryPoint = {
 export default function FarmBoundaryScreen() {
   const db = useDatabase();
   const { agent } = useAuth();
-  const { farmId } = useLocalSearchParams<{ farmId: string }>();
+  const { farmId, farmerId, dependsOn } = useLocalSearchParams<{ farmId: string; farmerId?: string; dependsOn?: string }>();
   const [points, setPoints] = useState<BoundaryPoint[]>([]);
   const [currentAccuracy, setCurrentAccuracy] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [confirmDivergence, setConfirmDivergence] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function capturePoint() {
@@ -42,6 +45,7 @@ export default function FarmBoundaryScreen() {
       });
 
       setCurrentAccuracy(position.coords.accuracy);
+      assertGpsAccuracy(position.coords.accuracy);
       setPoints((existing) => [
         ...existing,
         {
@@ -89,7 +93,18 @@ export default function FarmBoundaryScreen() {
       }
 
       const coordinates = [...points.map((point) => [point.longitude, point.latitude]), [firstPoint.longitude, firstPoint.latitude]];
-      const accuracyMeters = maxAccuracy(points);
+    const accuracyMeters = maxAccuracy(points);
+    if (accuracyMeters) {
+      assertGpsAccuracy(accuracyMeters);
+    }
+
+    const farm = await getFarmById(db, farmId);
+    if (acresDiverge(farm?.sizeReportedAcres, areaCalculatedAcres) && !confirmDivergence) {
+      setConfirmDivergence(true);
+      setError(`GPS area ${areaCalculatedAcres.toFixed(2)} acres is far from the reported ${farm?.sizeReportedAcres} acres. Tap complete again to save anyway.`);
+      setSaving(false);
+      return;
+    }
       const geometryInput = {
         farmId,
         areaCalculatedAcres,
@@ -101,7 +116,17 @@ export default function FarmBoundaryScreen() {
         polygonGeojson: JSON.stringify({ type: "Polygon", coordinates: [coordinates] }),
       };
 
-      await saveGeometry(db, accuracyMeters ? { ...geometryInput, accuracyMeters } : geometryInput);
+      await saveGeometry(db, {
+        ...(accuracyMeters ? { ...geometryInput, accuracyMeters } : geometryInput),
+        dependsOn: dependsOn ? [dependsOn] : [],
+      });
+
+      if (farmerId) {
+        await upsertCollectionSession(db, { farmerId, farmId, currentStep: "holdings" });
+        router.replace({ pathname: "/collect/holdings", params: { farmerId, farmId, dependsOn } });
+        return;
+      }
+
       router.replace({ pathname: "/farms/[farmId]", params: { farmId } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save boundary");
@@ -119,7 +144,7 @@ export default function FarmBoundaryScreen() {
 
       <View style={mapFallbackStyle}>
         <Text style={{ color: Colors.charcoal, fontWeight: "700" }}>Captured points: {points.length}</Text>
-        <Text style={{ color: Colors.charcoal500, marginTop: 6 }}>Current accuracy: {currentAccuracy ? `${Math.round(currentAccuracy)} m` : "Not captured"}</Text>
+        <Text style={{ color: Colors.charcoal500, marginTop: 6 }}>Current accuracy: {formatAccuracy(currentAccuracy)}</Text>
         <Text style={{ color: Colors.charcoal500, marginTop: 6 }}>Estimated area: {points.length >= 3 ? `${calculateAreaAcres(points).toFixed(3)} acres` : "Need 3 points"}</Text>
       </View>
 
@@ -198,9 +223,9 @@ function maxAccuracy(points: BoundaryPoint[]) {
   return accuracies.length ? Math.max(...accuracies) : undefined;
 }
 
-const mapFallbackStyle = { backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 16, marginTop: 16 };
+const mapFallbackStyle = { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 16, marginTop: 16 };
 const pointRowStyle = { backgroundColor: Colors.brandMuted, borderRadius: 10, padding: 12, marginTop: 10 };
-const buttonTextStyle = { color: "white", fontWeight: "700" as const };
+const buttonTextStyle = { color: Colors.brandInk, fontWeight: "700" as const };
 
 function buttonStyle(disabled: boolean, color: string) {
   return {

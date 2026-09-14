@@ -19,7 +19,7 @@ export default function FarmerFinancialScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.surface, padding: 24, justifyContent: "center" }}>
       <Text style={{ color: Colors.brand, fontSize: 26, fontWeight: "700" }}>Financial</Text>
-      <View style={{ marginTop: 18, backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 16 }}>
+      <View style={{ marginTop: 18, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 16 }}>
         <Text style={{ color: Colors.charcoal, fontWeight: "700" }}>Financial collection status</Text>
         <Text style={{ color: Colors.charcoal500, marginTop: 8 }}>{enterpriseCount} enterprise records available for income/cost capture.</Text>
         <Text style={{ color: Colors.amberField, marginTop: 8 }}>Detailed loan and M-PESA statement storage requires the financial schema expansion.</Text>

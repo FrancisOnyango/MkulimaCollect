@@ -22,11 +22,11 @@ export default function DeviceSetupScreen() {
         <Text style={{ color: Colors.charcoal700, marginTop: 8 }}>{deviceId || "Preparing device identifier"}</Text>
       </View>
       <Pressable accessibilityRole="button" onPress={() => router.replace("/(auth)/login")} style={buttonStyle}>
-        <Text style={{ color: "white", fontWeight: "700" }}>Continue to login</Text>
+        <Text style={{ color: Colors.brandInk, fontWeight: "700" }}>Continue to login</Text>
       </Pressable>
     </View>
   );
 }
 
-const cardStyle = { backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginTop: 18 };
+const cardStyle = { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginTop: 18 };
 const buttonStyle = { alignItems: "center" as const, borderRadius: 12, backgroundColor: Colors.brand, paddingVertical: 14, marginTop: 24 };

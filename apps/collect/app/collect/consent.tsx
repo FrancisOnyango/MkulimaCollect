@@ -5,6 +5,8 @@ import { useDatabase } from "@/components/providers/DBProvider";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { saveConsent } from "@/features/farmers/consentRepository";
 import { createFarmer } from "@/features/farmers/farmerRepository";
+import { upsertCollectionSession } from "@/features/farmers/collectionSessionRepository";
+import { captureCurrentPosition } from "@/lib/deviceLocation";
 
 export default function ConsentStep() {
   const db = useDatabase();
@@ -31,12 +33,16 @@ export default function ConsentStep() {
         orgId: agent.orgId,
         status: "IN_PROGRESS",
       });
+      const gps = await captureCurrentPosition().catch(() => null);
       const { operationUuid: consentOperationUuid } = await saveConsent(db, {
         farmerId,
         version: "1.0.0",
         method: "DIGITAL",
         language: "en",
         agentId: agent.id,
+        gpsLatitude: gps?.latitude,
+        gpsLongitude: gps?.longitude,
+        gpsAccuracyM: gps?.accuracyM ?? undefined,
         itemsAgreed: [
           "data_collection",
           evidenceAuthorized ? "evidence_capture" : "evidence_declined",
@@ -47,6 +53,7 @@ export default function ConsentStep() {
         dependsOn: [farmerOperationUuid],
       });
 
+      await upsertCollectionSession(db, { farmerId, currentStep: "identity" });
       router.push({ pathname: "/collect/identity", params: { farmerId, dependsOn: consentOperationUuid } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save consent");

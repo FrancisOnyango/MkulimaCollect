@@ -111,6 +111,8 @@ export class LocalDevelopmentAdapter implements MkulimaScoreApi {
         serverVersion: 1,
       })),
       rejected: [],
+      conflicts: [],
+      serverCursor: `dev-cursor-${Date.now()}`,
     };
   }
 

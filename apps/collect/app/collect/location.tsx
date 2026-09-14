@@ -29,9 +29,9 @@ export default function LocationStep() {
       <StepHeader
         eyebrow="Geospatial checkpoint"
         title="Farm location assurance"
-        description="Confirm the farm record is ready for GPS boundary capture. Boundary data is saved locally first, then synced through the controlled ingestion queue."
-        step={4}
-        total={8}
+        description="The farm GPS pin is captured on the farm step. This screen opens the walked-boundary tool."
+        step={5}
+        total={9}
       />
 
       <SectionCard title="Location workflow" description="The human-readable farm location is captured in the farm profile. This step controls measured boundary capture and evidence quality.">

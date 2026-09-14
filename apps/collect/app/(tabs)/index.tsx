@@ -1,17 +1,40 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { getActiveSession, resumePathForSession } from "@/features/farmers/collectionSessionRepository";
 import { sectorCatalog, sectorGroups } from "@/features/sectors/catalog";
 import { useSyncStatus } from "@/features/sync/useSyncStatus";
+import { useDatabase } from "@/components/providers/DBProvider";
 
 const workflow = ["Consent", "Farmer", "Farm", "Sector", "Evidence", "Review"];
 
 export default function HomeScreen() {
+  const db = useDatabase();
   const { agent, logout } = useAuth();
   const { counts, isSyncing, lastRun, syncNow } = useSyncStatus();
   const waitingCount = counts.PENDING_SYNC + counts.RETRY;
   const hasWorkToSync = waitingCount > 0;
+  const [resumeFarmerId, setResumeFarmerId] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      void getActiveSession(db).then((session) => {
+        setResumeFarmerId(session?.farmerId ?? null);
+      });
+    }, [db]),
+  );
+
+  async function handleResume() {
+    const session = await getActiveSession(db);
+    if (!session) {
+      router.push("/collect");
+      return;
+    }
+    const target = resumePathForSession(session);
+    router.push({ pathname: target.pathname, params: target.params } as never);
+  }
 
   async function handleLogout() {
     await logout();
@@ -28,12 +51,18 @@ export default function HomeScreen() {
             {agent?.name ?? "Field agent"} · {agent?.orgName ?? "Organization"}{agent?.clusterName ? ` · ${agent.clusterName}` : ""}
           </Text>
           <View style={styles.heroActions}>
-            <Pressable accessibilityRole="button" onPress={() => router.push("/collect")} style={styles.primaryAction}>
-              <Text style={styles.primaryActionText}>Start collection</Text>
+            <Pressable accessibilityRole="button" onPress={() => router.push("/collect/consent")} style={styles.primaryAction}>
+              <Text style={styles.primaryActionText}>{resumeFarmerId ? "New collection" : "Start collection"}</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.push("/sync")} style={styles.secondaryAction}>
-              <Text style={styles.secondaryActionText}>Sync centre</Text>
-            </Pressable>
+            {resumeFarmerId ? (
+              <Pressable accessibilityRole="button" onPress={() => { void handleResume(); }} style={styles.secondaryAction}>
+                <Text style={styles.secondaryActionText}>Resume draft</Text>
+              </Pressable>
+            ) : (
+              <Pressable accessibilityRole="button" onPress={() => router.push("/sync")} style={styles.secondaryAction}>
+                <Text style={styles.secondaryActionText}>Sync centre</Text>
+              </Pressable>
+            )}
           </View>
         </View>
 
@@ -129,26 +158,26 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
   },
   hero: {
-    backgroundColor: Colors.brandDark,
-    borderRadius: 8,
+    backgroundColor: Colors.ink,
+    borderRadius: 24,
     padding: 18,
   },
   eyebrow: {
-    color: "#D7E9DE",
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0,
+    color: Colors.brandMid,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.6,
     textTransform: "uppercase",
   },
   title: {
-    color: "white",
+    color: "#FFFFFF",
     fontSize: 27,
-    fontWeight: "800",
+    fontWeight: "700",
     lineHeight: 33,
     marginTop: 10,
   },
   subtitle: {
-    color: "#E7F0EA",
+    color: "rgba(255,255,255,0.7)",
     fontSize: 14,
     lineHeight: 20,
     marginTop: 8,
@@ -161,22 +190,22 @@ const styles = StyleSheet.create({
   primaryAction: {
     alignItems: "center",
     backgroundColor: Colors.brand,
-    borderRadius: 8,
+    borderRadius: 999,
     flex: 1,
     minHeight: 48,
     justifyContent: "center",
     paddingHorizontal: 12,
   },
   primaryActionText: {
-    color: "white",
+    color: Colors.brandInk,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   secondaryAction: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderColor: "rgba(255,255,255,0.28)",
-    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.2)",
+    borderRadius: 999,
     borderWidth: 1,
     flex: 1,
     minHeight: 48,
@@ -184,9 +213,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   secondaryActionText: {
-    color: "white",
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   kpiGrid: {
     flexDirection: "row",
@@ -195,9 +224,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   metric: {
-    backgroundColor: "white",
+    backgroundColor: Colors.card,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 22,
     borderWidth: 1,
     flexBasis: "47%",
     flexGrow: 1,
@@ -226,9 +255,9 @@ const styles = StyleSheet.create({
     color: Colors.redField,
   },
   section: {
-    backgroundColor: "white",
+    backgroundColor: Colors.card,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 22,
     borderWidth: 1,
     marginTop: 12,
     padding: 16,
@@ -255,9 +284,9 @@ const styles = StyleSheet.create({
   },
   flowItem: {
     alignItems: "center",
-    backgroundColor: Colors.brandMuted,
+    backgroundColor: Colors.surface,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     gap: 10,
@@ -265,9 +294,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   flowNumber: {
-    backgroundColor: Colors.brandLight,
+    backgroundColor: Colors.brand,
     borderRadius: 999,
-    color: Colors.brandDark,
+    color: Colors.brandInk,
     fontSize: 12,
     fontWeight: "900",
     height: 24,
@@ -295,9 +324,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    backgroundColor: Colors.brandMuted,
+    backgroundColor: Colors.surface,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -323,7 +352,7 @@ const styles = StyleSheet.create({
   syncButton: {
     alignItems: "center",
     backgroundColor: Colors.brand,
-    borderRadius: 8,
+    borderRadius: 999,
     minHeight: 48,
     justifyContent: "center",
     minWidth: 86,
@@ -333,9 +362,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.charcoal100,
   },
   syncButtonText: {
-    color: "white",
+    color: Colors.brandInk,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   syncButtonTextDisabled: {
     color: Colors.charcoal500,
@@ -343,7 +372,7 @@ const styles = StyleSheet.create({
   logoutButton: {
     alignItems: "center",
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 999,
     borderWidth: 1,
     marginTop: 14,
     minHeight: 50,

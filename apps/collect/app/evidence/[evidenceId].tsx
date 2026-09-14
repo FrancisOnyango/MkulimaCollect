@@ -49,6 +49,6 @@ export default function EvidenceDetailScreen() {
   );
 }
 
-const cardStyle = { backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginTop: 14 };
+const cardStyle = { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginTop: 14 };
 const sectionTitleStyle = { color: Colors.charcoal, fontSize: 17, fontWeight: "700" as const };
 const rowStyle = { color: Colors.charcoal700, marginTop: 8 };

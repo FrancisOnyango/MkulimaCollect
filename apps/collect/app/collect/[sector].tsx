@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { ChoiceGroup, DataRow, FormScreen, Notice, PrimaryButton, SecondaryButton, SectionCard, StepHeader, TextField, ToggleRow } from "@/components/ui/FormKit";
 import { Colors } from "@/constants/colors";
 import { useDatabase } from "@/components/providers/DBProvider";
+import { getEvidenceByEnterprise } from "@/features/evidence/evidenceRepository";
 import { saveExpense, saveProductionObservation } from "@/features/production/productionRepository";
 import { defaultSectorId, getSectorMeta } from "@/features/sectors/catalog";
 import { getSectorSchema } from "@/features/sectors/sectorSchemas";
@@ -19,10 +20,23 @@ export default function SectorCollectionScreen() {
   const sectorMeta = useMemo(() => getSectorMeta(schema.sector), [schema.sector]);
   const [sectionIndex, setSectionIndex] = useState(0);
   const [values, setValues] = useState<Record<string, FormValue>>({});
+  const [attachedCategories, setAttachedCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const section = schema.sections[sectionIndex];
   const isLast = sectionIndex === schema.sections.length - 1;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!params.enterpriseId) {
+        return;
+      }
+
+      void getEvidenceByEnterprise(db, params.enterpriseId).then((rows) => {
+        setAttachedCategories(rows.map((row) => row.category));
+      });
+    }, [db, params.enterpriseId]),
+  );
 
   async function saveCurrentSection(nextSectionIndex?: number) {
     if (!params.enterpriseId || !section) {
@@ -31,7 +45,17 @@ export default function SectorCollectionScreen() {
     }
 
     const visibleFields = section.fields.filter((field) => isVisible(field, values));
-    const missing = visibleFields.filter((field) => field.required && !hasValue(values[field.id]));
+    const missing = visibleFields.filter((field) => {
+      if (!field.required) {
+        return false;
+      }
+
+      if (field.type === "evidence") {
+        return !attachedCategories.includes(field.id);
+      }
+
+      return !hasValue(values[field.id]);
+    });
 
     if (missing.length) {
       setError(`Complete required fields: ${missing.map((field) => field.label).join(", ")}.`);
@@ -72,7 +96,7 @@ export default function SectorCollectionScreen() {
       if (typeof nextSectionIndex === "number") {
         setSectionIndex(nextSectionIndex);
       } else {
-        router.replace({ pathname: "/collect/evidence-review", params: { farmerId: params.farmerId, farmId: params.farmId, enterpriseId: params.enterpriseId, sector: schema.sector } });
+        router.replace({ pathname: "/collect/financial", params: { farmerId: params.farmerId, farmId: params.farmId, enterpriseId: params.enterpriseId, sector: schema.sector, dependsOn: params.dependsOn } });
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save production response");
@@ -132,17 +156,49 @@ export default function SectorCollectionScreen() {
 
       <SectionCard title={section.title} description={sectionDescription(section.id)}>
         {section.fields.filter((field) => isVisible(field, values)).map((field) => (
-          <FieldInput key={field.id} field={field} value={values[field.id]} onChange={(value) => setValues((existing) => ({ ...existing, [field.id]: value }))} />
+          <FieldInput
+            key={field.id}
+            field={field}
+            value={values[field.id]}
+            attached={attachedCategories.includes(field.id)}
+            onAttach={() =>
+              router.push({
+                pathname: "/evidence/capture",
+                params: {
+                  farmerId: params.farmerId,
+                  farmId: params.farmId,
+                  enterpriseId: params.enterpriseId,
+                  sector: schema.sector,
+                  category: field.id,
+                  returnTo: "sector",
+                  dependsOn: params.dependsOn,
+                },
+              })
+            }
+            onChange={(value) => setValues((existing) => ({ ...existing, [field.id]: value }))}
+          />
         ))}
       </SectionCard>
 
-      {section.id === "evidence" ? <Notice title="Evidence prompts" message="This section records what evidence is expected. Actual photos and documents are attached in the evidence step after production capture." tone="warning" /> : null}
+      {section.id === "evidence" ? <Notice title="Required attachments" message="Each listed document must be captured before this sector can finish." tone="warning" /> : null}
       {error ? <Notice title={error} tone="danger" /> : null}
     </FormScreen>
   );
 }
 
-function FieldInput({ field, value, onChange }: { field: SectorField; value: FormValue | undefined; onChange(value: FormValue): void }) {
+function FieldInput({
+  field,
+  value,
+  attached,
+  onAttach,
+  onChange,
+}: {
+  field: SectorField;
+  value: FormValue | undefined;
+  attached?: boolean;
+  onAttach?: () => void;
+  onChange(value: FormValue): void;
+}) {
   if (field.type === "yes_no") {
     return <ToggleRow label={`${field.label}${field.required ? " *" : ""}`} value={value === true} onValueChange={onChange} />;
   }
@@ -157,12 +213,10 @@ function FieldInput({ field, value, onChange }: { field: SectorField; value: For
 
   if (field.type === "evidence") {
     return (
-      <ToggleRow
-        label={field.label}
-        description="Mark this prompt when the farmer has this evidence available for capture or later upload."
-        value={value === "available"}
-        onValueChange={(available) => onChange(available ? "available" : "")}
-      />
+      <View style={{ marginBottom: 8 }}>
+        <DataRow label={field.label} value={attached ? "Attached" : "Required"} tone={attached ? "success" : "warning"} />
+        <SecondaryButton label={attached ? "Replace attachment" : "Attach now"} onPress={onAttach ?? (() => undefined)} />
+      </View>
     );
   }
 
@@ -219,7 +273,7 @@ function sectionDescription(sectionId: string) {
     case "sales":
       return "Record buyer, price, delivery, and payment signals used for verification and scoring confidence.";
     case "evidence":
-      return "Identify documents and photos that should be attached before profile submission.";
+      return "Attach every required photo or document for this sector before finishing.";
     default:
       return "Complete the strongest available production signals for this enterprise.";
   }
@@ -240,9 +294,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   sectionTab: {
-    backgroundColor: Colors.brandMuted,
+    backgroundColor: Colors.surface,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 999,
     borderWidth: 1,
     maxWidth: "48%",
     minHeight: 38,
@@ -251,7 +305,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   sectionTabActive: {
-    backgroundColor: Colors.brandLight,
+    backgroundColor: Colors.brand,
     borderColor: Colors.brand,
   },
   sectionTabDone: {
@@ -263,6 +317,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   sectionTabTextActive: {
-    color: Colors.brandDark,
+    color: Colors.brandInk,
   },
 });

@@ -37,6 +37,6 @@ export default function FarmerEnterprisesScreen() {
   );
 }
 
-const cardStyle = { backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10 };
+const cardStyle = { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10 };
 const titleStyle = { color: Colors.charcoal, fontWeight: "700" as const, fontSize: 16 };
 const metaStyle = { color: Colors.charcoal500, marginTop: 4 };

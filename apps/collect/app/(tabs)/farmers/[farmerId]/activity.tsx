@@ -27,7 +27,7 @@ export default function FarmerActivityScreen() {
         keyExtractor={(item) => item.id}
         ListEmptyComponent={<Text style={{ color: Colors.charcoal500 }}>No audit events yet.</Text>}
         renderItem={({ item }) => (
-          <View style={{ backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10 }}>
+          <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10 }}>
             <Text style={{ color: Colors.charcoal, fontWeight: "700" }}>{item.action}</Text>
             <Text style={{ color: Colors.charcoal500, marginTop: 4 }}>{item.createdAt}</Text>
           </View>

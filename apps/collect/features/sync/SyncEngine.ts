@@ -1,6 +1,10 @@
 import type { MkulimaScoreApi } from "@/lib/api/ApiClient";
 import type { AppDatabase } from "@/lib/db/database";
-import { getPendingEntries, markRetry, markSynced, markSyncing } from "./SyncOutbox";
+import { MetadataKey, getMetadata, setMetadata } from "@/lib/db/metadataRepository";
+import { getLocalAgent } from "@/features/auth/localAgentRepository";
+import { upsertTask } from "@/features/tasks/taskRepository";
+import { getPendingEntries, markConflict, markRetry, markSynced, markSyncing } from "./SyncOutbox";
+import { saveConflict } from "./conflictRepository";
 import { saveMapping } from "./serverMappingRepository";
 import { finishSyncAttempt, startSyncAttempt } from "./syncAttemptRepository";
 import type { SyncOutboxEntry } from "./types";
@@ -11,22 +15,18 @@ export type SyncRunResult = {
   attempted: number;
   synced: number;
   failed: number;
+  conflicts: number;
 };
 
-/**
- * runSyncEngine now uses a lightweight DB-backed lock so concurrent runs (including across restarts)
- * don't cause duplicate work or race conditions. If the lock cannot be acquired, the run exits
- * immediately with zero attempts — callers should retry later (e.g., on reconnect or by schedule).
- */
 export async function runSyncEngine(db: AppDatabase, api: MkulimaScoreApi): Promise<SyncRunResult> {
   const lockAcquired = await acquireSyncLock(db);
 
   if (!lockAcquired) {
     Sentry.addBreadcrumb({ category: "sync", message: "sync-lock-acquire-failed", level: "info" });
-    return { attempted: 0, synced: 0, failed: 0 };
+    return { attempted: 0, synced: 0, failed: 0, conflicts: 0 };
   }
 
-  const result: SyncRunResult = { attempted: 0, synced: 0, failed: 0 };
+  const result: SyncRunResult = { attempted: 0, synced: 0, failed: 0, conflicts: 0 };
 
   try {
     const entries = await getPendingEntries(db);
@@ -36,16 +36,21 @@ export async function runSyncEngine(db: AppDatabase, api: MkulimaScoreApi): Prom
       const attemptId = await startSyncAttempt(db, entry.entryUuid, entry.retryCount + 1);
 
       try {
-        Sentry.addBreadcrumb({ category: 'sync', message: `sync-start ${entry.entryUuid}`, data: { operationUuid: entry.operationUuid } });
+        Sentry.addBreadcrumb({ category: "sync", message: `sync-start ${entry.entryUuid}`, data: { operationUuid: entry.operationUuid } });
         await markSyncing(db, entry.entryUuid);
-        await syncEntry(db, api, entry);
-        await markSynced(db, entry.entryUuid);
-        await finishSyncAttempt(db, attemptId, "SYNCED");
-        Sentry.addBreadcrumb({ category: 'sync', message: `sync-succeeded ${entry.entryUuid}` });
-        result.synced += 1;
+        const outcome = await syncEntry(db, api, entry);
+        if (outcome === "conflict") {
+          await finishSyncAttempt(db, attemptId, "CONFLICT");
+          result.conflicts += 1;
+        } else {
+          await markSynced(db, entry.entryUuid);
+          await finishSyncAttempt(db, attemptId, "SYNCED");
+          result.synced += 1;
+        }
+        Sentry.addBreadcrumb({ category: "sync", message: `sync-${outcome} ${entry.entryUuid}` });
       } catch (caught) {
         const message = caught instanceof Error ? caught.message : "Unknown sync error";
-        Sentry.addBreadcrumb({ category: 'sync', message: `sync-failed ${entry.entryUuid}`, data: { error: message } });
+        Sentry.addBreadcrumb({ category: "sync", message: `sync-failed ${entry.entryUuid}`, data: { error: message } });
         Sentry.captureException(caught);
         await finishSyncAttempt(db, attemptId, "FAILED", message);
         await markRetry(db, entry.entryUuid, entry.retryCount + 1, message);
@@ -53,18 +58,20 @@ export async function runSyncEngine(db: AppDatabase, api: MkulimaScoreApi): Prom
       }
     }
 
+    await pullRemoteWork(db, api);
+    return result;
+  } catch {
     return result;
   } finally {
     try {
-      // Record overall metrics and export them (Sentry + console)
-      const { exportMetrics } = await import('@/lib/metricsExporter');
-      // record simple metrics
-      const { recordMetric } = await import('@/lib/metrics');
-      recordMetric('sync.attempted', result.attempted);
-      recordMetric('sync.synced', result.synced);
-      recordMetric('sync.failed', result.failed);
+      const { exportMetrics } = await import("@/lib/metricsExporter");
+      const { recordMetric } = await import("@/lib/metrics");
+      recordMetric("sync.attempted", result.attempted);
+      recordMetric("sync.synced", result.synced);
+      recordMetric("sync.failed", result.failed);
+      recordMetric("sync.conflicts", result.conflicts);
       await exportMetrics();
-    } catch (e) {
+    } catch {
       // ignore exporter failures
     }
 
@@ -72,7 +79,7 @@ export async function runSyncEngine(db: AppDatabase, api: MkulimaScoreApi): Prom
   }
 }
 
-async function syncEntry(db: AppDatabase, api: MkulimaScoreApi, entry: SyncOutboxEntry): Promise<void> {
+async function syncEntry(db: AppDatabase, api: MkulimaScoreApi, entry: SyncOutboxEntry): Promise<"synced" | "conflict"> {
   if (entry.entityType === "farmer" && entry.mutationType === "CREATE") {
     const localUuid = getString(entry.payload, "localUuid") ?? entry.entityId;
     const agentId = getRequiredString(entry.payload, "agentId");
@@ -91,10 +98,12 @@ async function syncEntry(db: AppDatabase, api: MkulimaScoreApi, entry: SyncOutbo
       serverId: response.msid,
       operationUuid: response.operationUuid,
     });
-    return;
+    return "synced";
   }
 
+  const cursor = await getMetadata(db, MetadataKey.SYNC_CURSOR);
   const batchResult = await api.submitSyncBatch({
+    baselineCursor: cursor,
     operations: [
       {
         operationUuid: entry.operationUuid,
@@ -108,10 +117,55 @@ async function syncEntry(db: AppDatabase, api: MkulimaScoreApi, entry: SyncOutbo
     ],
   });
 
-  const rejection = batchResult.rejected.find((item) => item.operationUuid === entry.operationUuid);
+  if (batchResult.serverCursor) {
+    await setMetadata(db, MetadataKey.SYNC_CURSOR, batchResult.serverCursor);
+  }
 
+  const conflict = batchResult.conflicts?.find((item) => item.operationUuid === entry.operationUuid);
+  if (conflict) {
+    await saveConflict(db, {
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      localPayload: entry.payload,
+      remotePayload: { code: conflict.code, message: conflict.message },
+      operationUuid: entry.operationUuid,
+      code: conflict.code,
+    });
+    await markConflict(db, entry.entryUuid, `${conflict.code}: ${conflict.message}`);
+    return "conflict";
+  }
+
+  const rejection = batchResult.rejected.find((item) => item.operationUuid === entry.operationUuid);
   if (rejection) {
     throw new Error(`${rejection.code}: ${rejection.message}`);
+  }
+
+  return "synced";
+}
+
+async function pullRemoteWork(db: AppDatabase, api: MkulimaScoreApi): Promise<void> {
+  try {
+    const agent = await getLocalAgent(db);
+    if (!agent) {
+      return;
+    }
+
+    const cursor = (await getMetadata(db, MetadataKey.SYNC_CURSOR)) ?? undefined;
+    const tasks = await api.getTasks(agent.agentId, cursor);
+    for (const task of tasks) {
+      await upsertTask(db, {
+        id: task.id,
+        agentId: task.agentId || agent.agentId,
+        farmerId: task.farmerId,
+        type: task.type,
+        priority: task.priority,
+        title: task.title,
+        detail: task.detail,
+        dueDate: task.dueDate,
+      });
+    }
+  } catch {
+    // Pull failures must not roll back a successful outbox push.
   }
 }
 

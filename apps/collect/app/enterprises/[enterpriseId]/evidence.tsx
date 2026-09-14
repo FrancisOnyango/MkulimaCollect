@@ -37,7 +37,7 @@ export default function EnterpriseEvidenceScreen() {
             onPress={() => router.push({ pathname: "/evidence/capture", params: { farmerId: enterprise.farmerId, farmId: enterprise.farmId, enterpriseId } })}
             style={{ backgroundColor: Colors.brand, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}
           >
-            <Text style={{ color: "white", fontWeight: "700" }}>Add</Text>
+            <Text style={{ color: Colors.brandInk, fontWeight: "700" }}>Add</Text>
           </Pressable>
         ) : null}
       </View>
@@ -56,6 +56,6 @@ export default function EnterpriseEvidenceScreen() {
   );
 }
 
-const cardStyle = { backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10 };
+const cardStyle = { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10 };
 const titleStyle = { color: Colors.charcoal, fontWeight: "700" as const, fontSize: 16 };
 const metaStyle = { color: Colors.charcoal500, marginTop: 4 };

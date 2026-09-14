@@ -5,6 +5,7 @@ import { DataRow, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader } f
 import { Colors } from "@/constants/colors";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { calculateCompletenessDetails } from "@/features/farmers/farmerCompleteness";
+import { completeCollectionSession } from "@/features/farmers/collectionSessionRepository";
 import { updateCompleteness, updateFarmerStatus } from "@/features/farmers/farmerRepository";
 
 export default function ReviewStep() {
@@ -39,8 +40,15 @@ export default function ReviewStep() {
 
     try {
       const details = await calculateCompletenessDetails(db, farmerId);
+      if (details.missing.length) {
+        setCompleteness(details.percent);
+        setMissing(details.missing);
+        setError("Resolve missing holdings before submitting. Every farm and enterprise must be complete.");
+        return;
+      }
       await updateCompleteness(db, farmerId, details.percent);
       await updateFarmerStatus(db, farmerId, "SUBMITTED");
+      await completeCollectionSession(db, farmerId);
       setCompleteness(details.percent);
       setMissing(details.missing);
       setSubmitted(true);

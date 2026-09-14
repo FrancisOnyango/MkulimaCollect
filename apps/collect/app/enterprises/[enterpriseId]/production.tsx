@@ -36,7 +36,7 @@ export default function EnterpriseProductionScreen() {
             onPress={() => router.push({ pathname: "/collect/[sector]", params: { sector: enterprise.sector, enterpriseId: enterprise.id, farmerId: enterprise.farmerId } })}
             style={{ backgroundColor: Colors.brand, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}
           >
-            <Text style={{ color: "white", fontWeight: "700" }}>Add</Text>
+            <Text style={{ color: Colors.brandInk, fontWeight: "700" }}>Add</Text>
           </Pressable>
         ) : null}
       </View>
@@ -68,6 +68,6 @@ function summarizePayload(payload: string) {
   }
 }
 
-const cardStyle = { backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10 };
+const cardStyle = { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10 };
 const titleStyle = { color: Colors.charcoal, fontWeight: "700" as const, fontSize: 16 };
 const metaStyle = { color: Colors.charcoal500, marginTop: 4 };

@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { DataRow, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader } from "@/components/ui/FormKit";
 import { useDatabase } from "@/components/providers/DBProvider";
-import { getEvidenceByFarmer } from "@/features/evidence/evidenceRepository";
+import { getEvidenceByEnterprise, getEvidenceByFarmer } from "@/features/evidence/evidenceRepository";
+import { getNextIncompleteEnterprise } from "@/features/farmers/incompleteHoldings";
+import { upsertCollectionSession } from "@/features/farmers/collectionSessionRepository";
 import { getSectorMeta } from "@/features/sectors/catalog";
 import { type evidence } from "@/lib/db/schema";
 
@@ -12,47 +14,107 @@ type EvidenceRow = typeof evidence.$inferSelect;
 
 export default function EvidenceReviewStep() {
   const db = useDatabase();
-  const params = useLocalSearchParams<{ farmerId?: string; farmId?: string; enterpriseId?: string; sector?: string }>();
+  const params = useLocalSearchParams<{ farmerId?: string; farmId?: string; enterpriseId?: string; sector?: string; dependsOn?: string }>();
   const [items, setItems] = useState<EvidenceRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const sectorMeta = getSectorMeta(params.sector ?? "");
+  const required = sectorMeta.evidenceCategories;
+  const attachedCategories = items.map((item) => item.category);
+  const missing = required.filter((category) => !attachedCategories.includes(category));
 
-  useEffect(() => {
-    if (params.farmerId) {
-      void getEvidenceByFarmer(db, params.farmerId).then(setItems);
+  useFocusEffect(
+    useCallback(() => {
+      if (params.enterpriseId) {
+        void getEvidenceByEnterprise(db, params.enterpriseId).then(setItems);
+        return;
+      }
+
+      if (params.farmerId) {
+        void getEvidenceByFarmer(db, params.farmerId).then(setItems);
+      }
+    }, [db, params.enterpriseId, params.farmerId]),
+  );
+
+  async function continueToReview() {
+    if (missing.length) {
+      setError(`Attach required evidence: ${missing.join(", ")}.`);
+      return;
     }
-  }, [db, params.farmerId]);
+
+    if (params.farmerId) {
+      const next = await getNextIncompleteEnterprise(db, params.farmerId, params.enterpriseId);
+      if (next) {
+        await upsertCollectionSession(db, {
+          farmerId: params.farmerId,
+          farmId: next.enterprise.farmId,
+          currentStep: "sector",
+          stepStates: { currentEnterpriseId: next.enterprise.id, currentSector: next.enterprise.sector },
+        });
+        router.replace({
+          pathname: "/collect/[sector]",
+          params: {
+            sector: next.enterprise.sector,
+            farmerId: params.farmerId,
+            farmId: next.enterprise.farmId,
+            enterpriseId: next.enterprise.id,
+            dependsOn: params.dependsOn,
+          },
+        });
+        return;
+      }
+
+      await upsertCollectionSession(db, { farmerId: params.farmerId, currentStep: "holdings" });
+    }
+
+    router.replace({ pathname: "/collect/holdings", params: { farmerId: params.farmerId, dependsOn: params.dependsOn } });
+  }
 
   return (
-    <FormScreen footer={params.farmerId ? <PrimaryButton label="Continue to profile review" onPress={() => router.push({ pathname: "/collect/review", params })} /> : undefined}>
+    <FormScreen footer={params.farmerId ? <PrimaryButton label={missing.length ? "Attach remaining evidence" : "Continue to next incomplete enterprise"} onPress={() => void continueToReview()} /> : undefined}>
       <StepHeader
         eyebrow="Evidence quality"
-        title="Attachment review"
-        description="Review photos and documents before submission. Evidence is stored with checksum metadata and queued for safe upload during sync."
-        step={8}
-        total={8}
+        title="Required attachments"
+        description={`${sectorMeta.label} needs ${required.length} evidence types before this profile can be submitted.`}
+        step={9}
+        total={9}
       />
 
-      <SectionCard title="Evidence summary" description="Profiles can be submitted without every optional attachment, but evidence improves backend verification confidence.">
-        <DataRow label="Attached items" value={`${items.length}`} tone={items.length ? "success" : "warning"} />
-        <DataRow label="Sector context" value={sectorMeta.label} />
-        <DataRow label="Storage mode" value="Local encrypted device storage" />
-        <DataRow label="Upload mode" value="Pre-signed evidence flow" />
+      <SectionCard title="Coverage" description="Each required category must have at least one saved photo or document.">
+        <DataRow label="Attached" value={`${required.length - missing.length} / ${required.length}`} tone={missing.length ? "warning" : "success"} />
+        <DataRow label="Sector" value={sectorMeta.label} />
+        {missing.length ? <Notice title="Still required" message={missing.join(", ")} tone="warning" /> : <Notice title="All required evidence attached" tone="success" />}
       </SectionCard>
 
       <View style={styles.listHeader}>
-        <Text style={styles.listTitle}>Attachments</Text>
-        {params.farmerId ? (
-          <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/evidence/capture", params: { ...params, category: sectorMeta.evidenceCategories[0] } })} style={styles.addButton}>
-            <Text style={styles.addButtonText}>Add evidence</Text>
-          </Pressable>
-        ) : null}
+        <Text style={styles.listTitle}>Required categories</Text>
       </View>
+
+      {required.map((category) => {
+        const attached = attachedCategories.includes(category);
+        return (
+          <Pressable
+            accessibilityRole="button"
+            key={category}
+            onPress={() =>
+              router.push({
+                pathname: "/evidence/capture",
+                params: { ...params, category, returnTo: "review" },
+              })
+            }
+            style={styles.card}
+          >
+            <Text style={styles.title}>{category}</Text>
+            <Text style={styles.meta}>{attached ? "Attached — tap to add another" : "Missing — tap to capture"}</Text>
+          </Pressable>
+        );
+      })}
 
       <FlatList
         scrollEnabled={false}
         data={items}
         keyExtractor={(item) => item.id}
-        ListEmptyComponent={<Notice title="No evidence attached yet" message={`Add ${sectorMeta.evidenceCategories.slice(0, 4).join(", ")} when available for this sector.`} tone="warning" />}
+        ListHeaderComponent={<Text style={[styles.listTitle, { marginTop: 18 }]}>Saved files</Text>}
+        ListEmptyComponent={<Notice title="No files yet" message="Capture each required category above." tone="warning" />}
         renderItem={({ item }) => (
           <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/evidence/[evidenceId]", params: { evidenceId: item.id } })} style={styles.card}>
             <Text style={styles.title}>{item.category}</Text>
@@ -60,6 +122,7 @@ export default function EvidenceReviewStep() {
           </Pressable>
         )}
       />
+      {error ? <Notice title={error} tone="danger" /> : null}
     </FormScreen>
   );
 }
@@ -76,18 +139,8 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "800",
   },
-  addButton: {
-    backgroundColor: Colors.brand,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  addButtonText: {
-    color: "white",
-    fontWeight: "800",
-  },
   card: {
-    backgroundColor: "white",
+    backgroundColor: Colors.card,
     borderColor: Colors.charcoal100,
     borderRadius: 8,
     borderWidth: 1,

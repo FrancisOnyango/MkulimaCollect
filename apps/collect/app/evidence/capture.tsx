@@ -10,6 +10,7 @@ import { useDatabase } from "@/components/providers/DBProvider";
 import { getEnterpriseById } from "@/features/enterprises/enterpriseRepository";
 import { createEvidence, type CreateEvidenceInput } from "@/features/evidence/evidenceRepository";
 import { getSectorMeta } from "@/features/sectors/catalog";
+import { sha256File } from "@/lib/fileHash";
 
 type SelectedAsset = {
   uri: string;
@@ -29,7 +30,7 @@ type PersistedAsset = {
 
 export default function EvidenceCaptureScreen() {
   const db = useDatabase();
-  const params = useLocalSearchParams<{ farmerId?: string; farmId?: string; enterpriseId?: string; sector?: string; category?: string; dependsOn?: string }>();
+  const params = useLocalSearchParams<{ farmerId?: string; farmId?: string; enterpriseId?: string; sector?: string; category?: string; dependsOn?: string; returnTo?: string }>();
   const sectorMeta = useMemo(() => getSectorMeta(params.sector ?? ""), [params.sector]);
   const defaultCategory = params.category ?? sectorMeta.evidenceCategories[0] ?? "farm-photo";
   const [category, setCategory] = useState(defaultCategory);
@@ -116,6 +117,35 @@ export default function EvidenceCaptureScreen() {
       }
 
       const { evidenceId } = await createEvidence(db, evidenceInput);
+
+      if (params.returnTo === "sector") {
+        router.replace({
+          pathname: "/collect/[sector]",
+          params: {
+            sector: params.sector,
+            farmerId,
+            farmId,
+            enterpriseId: params.enterpriseId,
+            dependsOn: params.dependsOn,
+          },
+        });
+        return;
+      }
+
+      if (params.returnTo === "review" || params.farmerId) {
+        router.replace({
+          pathname: "/collect/evidence-review",
+          params: {
+            farmerId,
+            farmId,
+            enterpriseId: params.enterpriseId,
+            sector: params.sector,
+            dependsOn: params.dependsOn,
+          },
+        });
+        return;
+      }
+
       router.replace({ pathname: "/evidence/[evidenceId]", params: { evidenceId } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save evidence");
@@ -186,10 +216,9 @@ async function persistEvidenceAsset(asset: SelectedAsset, category: string): Pro
 
   await FileSystem.copyAsync({ from: asset.uri, to: localUri });
 
-  const fileInfo = await FileSystem.getInfoAsync(localUri, { md5: true });
+  const fileInfo = await FileSystem.getInfoAsync(localUri);
   const fileSizeBytes = fileInfo.exists ? fileInfo.size ?? asset.fileSize ?? 0 : asset.fileSize ?? 0;
-  const checksumSeed = fileInfo.exists && "md5" in fileInfo && fileInfo.md5 ? `${fileInfo.md5}:${fileSizeBytes}` : `${localUri}:${fileSizeBytes}`;
-  const sha256 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, checksumSeed);
+  const sha256 = await sha256File(localUri);
 
   return {
     localUri,

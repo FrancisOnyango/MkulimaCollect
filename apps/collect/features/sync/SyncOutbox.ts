@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import * as Sentry from "@sentry/react";
 import { SyncState, type SyncStateValue } from "@/constants/syncStates";
 import type { AppDatabase } from "@/lib/db/database";
 import { syncOutbox } from "@/lib/db/schema";
@@ -69,7 +70,17 @@ export async function markSynced(db: AppDatabase, entryUuid: string, syncedAt = 
   await db.update(syncOutbox).set({ state: SyncState.SYNCED, syncedAt, lastError: null, nextRetryAt: null }).where(eq(syncOutbox.entryUuid, entryUuid));
 }
 
-import * as Sentry from "@sentry/react";
+export async function markConflict(db: AppDatabase, entryUuid: string, error: string): Promise<void> {
+  Sentry.addBreadcrumb({ category: "sync", message: `mark-conflict ${entryUuid}`, data: { error } });
+  await db
+    .update(syncOutbox)
+    .set({
+      state: SyncState.CONFLICT,
+      lastError: error,
+      nextRetryAt: null,
+    })
+    .where(eq(syncOutbox.entryUuid, entryUuid));
+}
 
 export async function markRetry(db: AppDatabase, entryUuid: string, nextRetryCount: number, error: string): Promise<void> {
   const fallbackDelayMs = retryBackoffMs[retryBackoffMs.length - 1] ?? 3_600_000;

@@ -1,23 +1,13 @@
 import type { MkulimaScoreApi } from "./ApiClient";
 import { LocalDevelopmentAdapter } from "./adapters/LocalDevelopmentAdapter";
 import { ProductionApiAdapter } from "./adapters/ProductionApiAdapter";
+import { getAppEnvironment, usesRemoteApi } from "./environment";
 
-export type AppEnvironment = "development" | "preview" | "production";
-
-export function getAppEnvironment(): AppEnvironment {
-  const value = process.env.EXPO_PUBLIC_ENVIRONMENT;
-
-  if (value === "production" || value === "preview" || value === "development") {
-    return value;
-  }
-
-  return "development";
-}
+export type { AppEnvironment } from "./environment";
+export { getAppEnvironment, usesRemoteApi };
 
 export function createApiClient(): MkulimaScoreApi {
-  const environment = getAppEnvironment();
-
-  if (environment === "production") {
+  if (usesRemoteApi()) {
     return new ProductionApiAdapter();
   }
 

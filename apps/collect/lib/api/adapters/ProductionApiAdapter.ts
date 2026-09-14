@@ -1,4 +1,6 @@
 ﻿import { SecureTokenStore } from "@/features/auth/SecureTokenStore";
+import { getAppVersion } from "@/lib/appVersion";
+import { assertHttpsUrl } from "@/lib/httpsUrl";
 import type { MkulimaScoreApi } from "../ApiClient";
 import type {
   AgentCredentials,
@@ -28,7 +30,9 @@ type RequestOptions = {
 
 type PlatformToken = {
   access_token: string;
-  token_type: string;
+  token_type?: string;
+  refresh_token?: string;
+  expires_in?: number;
 };
 
 type PlatformUser = {
@@ -77,7 +81,10 @@ export class ProductionApiAdapter implements MkulimaScoreApi {
   private readonly timeoutMs: number;
 
   constructor() {
-    this.baseUrl = normalizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL);
+    this.baseUrl = assertHttpsUrl(
+      process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL,
+      process.env.EXPO_PUBLIC_ENVIRONMENT === "development",
+    );
     this.timeoutMs = Number(process.env.EXPO_PUBLIC_API_TIMEOUT_MS ?? "30000");
   }
 
@@ -93,32 +100,69 @@ export class ProductionApiAdapter implements MkulimaScoreApi {
     });
 
     await SecureTokenStore.setAccessToken(token.access_token);
+    if (token.refresh_token) {
+      await SecureTokenStore.setRefreshToken(token.refresh_token);
+    }
     const user = await this.request<PlatformUser>("/auth/me", { auth: true });
-    const orgId = String(user.institution_id ?? credentials.orgId);
+    if (!user.institution_id) {
+      throw new Error("MkulimaScore did not return an institution for this agent. Tenant must come from the server.");
+    }
+    const orgId = String(user.institution_id);
 
     return {
       accessToken: token.access_token,
-      refreshToken: token.access_token,
-      expiresAt: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
+      refreshToken: token.refresh_token ?? "",
+      expiresAt: new Date(Date.now() + expiryMs(token.expires_in)).toISOString(),
       agent: toAgentProfile(user, orgId),
     };
   }
 
   async refreshSession(refreshToken: string): Promise<AuthResult> {
-    await SecureTokenStore.setAccessToken(refreshToken);
-    const user = await this.request<PlatformUser>("/auth/me", { auth: true });
-    const orgId = String(user.institution_id ?? process.env.EXPO_PUBLIC_MKULIMASCORE_INSTITUTION_ID ?? "unknown");
+    if (!refreshToken) {
+      throw new Error("Session expired. Sign in again.");
+    }
 
-    return {
-      accessToken: refreshToken,
-      refreshToken,
-      expiresAt: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
-      agent: toAgentProfile(user, orgId),
-    };
+    try {
+      const token = await this.request<PlatformToken>("/auth/refresh", {
+        method: "POST",
+        auth: false,
+        json: { refresh_token: refreshToken },
+      });
+      await SecureTokenStore.setAccessToken(token.access_token);
+      if (token.refresh_token) {
+        await SecureTokenStore.setRefreshToken(token.refresh_token);
+      }
+      const user = await this.request<PlatformUser>("/auth/me", { auth: true });
+      const orgId = String(user.institution_id ?? "unknown");
+      return {
+        accessToken: token.access_token,
+        refreshToken: token.refresh_token ?? refreshToken,
+        expiresAt: new Date(Date.now() + expiryMs(token.expires_in)).toISOString(),
+        agent: toAgentProfile(user, orgId),
+      };
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Refresh failed";
+      if (/404|405|not found/i.test(message)) {
+        throw new Error("Session expired. Sign in again.");
+      }
+      throw caught instanceof Error ? caught : new Error(message);
+    }
   }
 
-  async revokeDevice(_deviceId: string): Promise<void> {
-    await SecureTokenStore.clear();
+  async revokeDevice(deviceId: string): Promise<void> {
+    try {
+      await this.request("/mobile/devices/revoke", {
+        method: "POST",
+        auth: true,
+        json: { device_id: deviceId },
+      });
+    } catch {
+      try {
+        await this.request("/auth/logout", { method: "POST", auth: true });
+      } catch {
+        // Local session is still cleared by the caller.
+      }
+    }
   }
 
   async getBootstrapConfig(agentId: string): Promise<BootstrapConfig> {
@@ -135,7 +179,7 @@ export class ProductionApiAdapter implements MkulimaScoreApi {
     return {
       agentId,
       serverTime: getOptionalString(response, "server_time") ?? new Date().toISOString(),
-      minSupportedVersion: getOptionalString(response, "min_supported_version") ?? "1.0.0",
+      minSupportedVersion: getOptionalString(response, "min_supported_version") ?? getAppVersion(),
       consentVersion: getOptionalString(response, "consent_version") ?? "mkulimascore-v1",
     };
   }
@@ -265,7 +309,7 @@ export class ProductionApiAdapter implements MkulimaScoreApi {
         device_id: await getDeviceId(),
         app_version: getAppVersion(),
         client_time: new Date().toISOString(),
-        baseline_cursor: null,
+        baseline_cursor: batch.baselineCursor ?? null,
         changes: batch.operations.map((operation) => ({
           local_id: operation.localEntityId ?? getLocalEntityId(operation.payload) ?? operation.operationUuid,
           operation_id: operation.operationUuid,
@@ -282,6 +326,7 @@ export class ProductionApiAdapter implements MkulimaScoreApi {
 
     const accepted: SyncBatchResult["accepted"] = [];
     const rejected: SyncBatchResult["rejected"] = [];
+    const conflicts: NonNullable<SyncBatchResult["conflicts"]> = [];
 
     for (const operation of response.results) {
       const operationUuid = operation.operation_id ?? operation.local_id;
@@ -290,6 +335,12 @@ export class ProductionApiAdapter implements MkulimaScoreApi {
           operationUuid,
           serverId: operation.server_entity_id ?? response.sync_batch_id,
           serverVersion: operation.server_version ?? 1,
+        });
+      } else if (operation.status === "conflict") {
+        conflicts.push({
+          operationUuid,
+          code: operation.status,
+          message: operation.warnings?.join("; ") || "MkulimaScore reported a sync conflict.",
         });
       } else {
         rejected.push({
@@ -300,15 +351,23 @@ export class ProductionApiAdapter implements MkulimaScoreApi {
       }
     }
 
-    for (const issue of [...(response.rejected ?? []), ...(response.conflicts ?? [])]) {
+    for (const issue of response.rejected ?? []) {
       rejected.push({
         operationUuid: issue.operation_id ?? issue.local_id ?? response.sync_batch_id,
         code: issue.code ?? "mobile_sync_issue",
-        message: issue.message ?? "MkulimaScore ingestion rejected or conflicted with this change.",
+        message: issue.message ?? "MkulimaScore ingestion rejected this change.",
       });
     }
 
-    return { accepted, rejected };
+    for (const issue of response.conflicts ?? []) {
+      conflicts.push({
+        operationUuid: issue.operation_id ?? issue.local_id ?? response.sync_batch_id,
+        code: issue.code ?? "conflict",
+        message: issue.message ?? "MkulimaScore reported a sync conflict.",
+      });
+    }
+
+    return { accepted, rejected, conflicts, serverCursor: response.server_cursor ?? null };
   }
 
   private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -354,8 +413,11 @@ export class ProductionApiAdapter implements MkulimaScoreApi {
   }
 }
 
-function normalizeBaseUrl(url: string): string {
-  return url.replace(/\/+$/, "");
+function expiryMs(expiresIn?: number): number {
+  if (typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0) {
+    return expiresIn * 1000;
+  }
+  return TOKEN_TTL_MS;
 }
 
 async function getDeviceId(): Promise<string> {
@@ -365,10 +427,6 @@ async function getDeviceId(): Promise<string> {
   }
 
   throw new Error("Device id is missing. Please sign in again.");
-}
-
-function getAppVersion(): string {
-  return process.env.EXPO_PUBLIC_APP_VERSION || "0.1.0";
 }
 
 function createSyncBatchId(): string {

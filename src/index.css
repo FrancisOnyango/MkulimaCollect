@@ -2,18 +2,23 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-brand: #1A5C35;
-  --color-brand-dark: #0F3D22;
-  --color-brand-mid: #246B40;
-  --color-brand-light: #E8F4EC;
-  --color-brand-muted: #F4F8F5;
-  --color-surface: #FAFAFA;
-  --color-charcoal: #1C1C1E;
-  --color-charcoal-700: #3A3A3C;
-  --color-charcoal-500: #636366;
-  --color-charcoal-300: #AEAEB2;
-  --color-charcoal-100: #E5E5EA;
-  --color-charcoal-50: #F2F2F7;
+  --color-brand: #54C529;
+  --color-brand-ink: #FFFFFF;
+  --color-brand-dark: #3FA31C;
+  --color-brand-mid: #84D777;
+  --color-brand-light: #E7F8E1;
+  --color-brand-muted: #F3F9F1;
+  --color-surface: #F4F7F3;
+  --color-card: #FFFFFF;
+  --color-ink: #0D1B10;
+  --color-charcoal: #0D1B10;
+  --color-charcoal-700: #2A3B2E;
+  --color-charcoal-500: #5B6E5E;
+  --color-charcoal-400: #7C8C7E;
+  --color-charcoal-300: #ABC1AB;
+  --color-charcoal-200: #C8D6C8;
+  --color-charcoal-100: #E2E4E3;
+  --color-charcoal-50: #F0F3F0;
   --color-amber-field: #B45309;
   --color-amber-bg: #FEF3C7;
   --color-red-field: #B91C1C;
@@ -27,13 +32,13 @@
 }
 
 html, body, #root {
-  min-height: 100%;
   height: 100%;
 }
 
 body {
   font-family: 'Instrument Sans', system-ui, sans-serif;
-  background: radial-gradient(circle at top, #2d3b2f 0%, #1d2124 35%, #121416 100%);
+  background: #E2E4E3;
+  color: #0D1B10;
   margin: 0;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -47,7 +52,6 @@ button, input, select {
   font-family: 'DM Mono', monospace;
 }
 
-/* Hide scrollbar but keep scrollability */
 .scroll-hidden {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -56,14 +60,11 @@ button, input, select {
   display: none;
 }
 
-/* Smooth transitions */
-.screen-enter {
-  animation: slideUp 0.26s cubic-bezier(0.2, 0.7, 0.1, 1);
-}
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(14px) scale(0.995); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+.energea-glow {
+  background:
+    radial-gradient(ellipse 90% 50% at 50% -10%, rgba(132, 215, 119, 0.35), transparent 58%),
+    radial-gradient(ellipse 70% 40% at 100% 0%, rgba(84, 197, 41, 0.12), transparent 46%),
+    #F4F7F3;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -75,43 +76,21 @@ button, input, select {
   }
 }
 
-/* Map background simulation */
 .map-bg {
-  background-color: #C8D9B8;
+  background-color: #D7E8D2;
   background-image:
-    linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
-    radial-gradient(ellipse at 30% 40%, rgba(139,167,109,0.4) 0%, transparent 50%),
-    radial-gradient(ellipse at 70% 60%, rgba(101,135,79,0.3) 0%, transparent 40%),
-    radial-gradient(ellipse at 50% 20%, rgba(160,185,130,0.35) 0%, transparent 35%);
+    linear-gradient(rgba(255,255,255,0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.28) 1px, transparent 1px),
+    radial-gradient(ellipse at 30% 40%, rgba(132, 215, 119, 0.35) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 60%, rgba(84, 197, 41, 0.18) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 20%, rgba(165, 213, 160, 0.4) 0%, transparent 35%);
   background-size: 20px 20px, 20px 20px, 100% 100%, 100% 100%, 100% 100%;
 }
 
-/* Pulse animation for sync */
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-.pulse-dot {
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-
-/* Uploading animation */
-@keyframes uploading {
-  0% { width: 0%; }
-  100% { width: 100%; }
-}
-
-/* Focus styles for accessibility */
 :focus {
   outline: none;
 }
 :focus-visible {
-  outline: 3px solid rgba(34,197,94,0.9);
+  outline: 3px solid rgba(84, 197, 41, 0.45);
   outline-offset: 3px;
-}
-
-button:focus-visible,
-[arole='button']:focus-visible {
-  box-shadow: 0 0 0 4px rgba(34,197,94,0.08);
 }

@@ -428,6 +428,8 @@ export const conflicts = sqliteTable(
     entityId: text("entity_id").notNull(),
     localPayload: text("local_payload").notNull(),
     remotePayload: text("remote_payload").notNull(),
+    operationUuid: text("operation_uuid"),
+    code: text("code"),
     status: text("status").notNull().default("OPEN"),
     createdAt: text("created_at").notNull(),
     resolvedAt: text("resolved_at"),

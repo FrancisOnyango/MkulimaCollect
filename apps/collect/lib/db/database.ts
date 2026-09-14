@@ -378,14 +378,58 @@ CREATE TABLE IF NOT EXISTS local_agent (
   updated_at TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO app_migrations (id, applied_at)
-VALUES ('0001_initial', datetime('now'));
 `;
+
+const FOLLOW_ON_MIGRATIONS: { id: string; statements: string[] }[] = [
+  {
+    id: "0002_conflict_fields",
+    statements: [
+      "ALTER TABLE conflicts ADD COLUMN operation_uuid TEXT",
+      "ALTER TABLE conflicts ADD COLUMN code TEXT",
+    ],
+  },
+];
 
 export type AppDatabase = ExpoSQLiteDatabase<typeof schema>;
 
 export async function openAppDatabase(): Promise<AppDatabase> {
   const sqlite = await SQLite.openDatabaseAsync("mkulimacollect.db");
-  await sqlite.execAsync(migrationSql);
+  await applyMigrations(sqlite);
   return drizzle(sqlite, { schema });
+}
+
+export async function applyMigrations(sqlite: SQLite.SQLiteDatabase): Promise<void> {
+  await sqlite.execAsync(`
+    CREATE TABLE IF NOT EXISTS app_migrations (
+      id TEXT PRIMARY KEY NOT NULL,
+      applied_at TEXT NOT NULL
+    );
+  `);
+
+  const appliedRows = await sqlite.getAllAsync<{ id: string }>("SELECT id FROM app_migrations");
+  const applied = new Set(appliedRows.map((row) => row.id));
+
+  if (!applied.has("0001_initial")) {
+    await sqlite.execAsync(migrationSql);
+    await sqlite.runAsync("INSERT INTO app_migrations (id, applied_at) VALUES (?, datetime('now'))", "0001_initial");
+  }
+
+  for (const migration of FOLLOW_ON_MIGRATIONS) {
+    if (applied.has(migration.id)) {
+      continue;
+    }
+
+    for (const statement of migration.statements) {
+      try {
+        await sqlite.execAsync(statement);
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : String(caught);
+        if (!/duplicate column name/i.test(message)) {
+          throw caught;
+        }
+      }
+    }
+
+    await sqlite.runAsync("INSERT INTO app_migrations (id, applied_at) VALUES (?, datetime('now'))", migration.id);
+  }
 }

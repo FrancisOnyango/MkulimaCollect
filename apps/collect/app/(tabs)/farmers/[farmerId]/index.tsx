@@ -46,7 +46,7 @@ export default function FarmerOverviewScreen() {
       <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>{name}</Text>
       <Text style={{ color: Colors.charcoal500, marginTop: 6 }}>{farmer?.status ?? "Loading"} - {farmer?.completenessPct ?? 0}% complete</Text>
 
-      <View style={{ marginTop: 22, backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 16, gap: 8 }}>
+      <View style={{ marginTop: 22, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 16, gap: 8 }}>
         <Text style={{ color: Colors.charcoal }}>Farms: {farmRows.length}</Text>
         <Text style={{ color: Colors.charcoal }}>Enterprises: {enterpriseRows.length}</Text>
         <Text style={{ color: Colors.charcoal }}>Evidence: {evidenceRows.length}</Text>
@@ -54,7 +54,7 @@ export default function FarmerOverviewScreen() {
       </View>
 
       <Pressable accessibilityRole="button" onPress={() => router.push("/collect")} style={{ alignItems: "center", borderRadius: 12, backgroundColor: Colors.brand, paddingVertical: 14, marginTop: 20 }}>
-        <Text style={{ color: "white", fontWeight: "700" }}>Start another collection</Text>
+        <Text style={{ color: Colors.brandInk, fontWeight: "700" }}>Start another collection</Text>
       </Pressable>
     </View>
   );

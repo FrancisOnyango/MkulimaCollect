@@ -4,7 +4,7 @@ const variants: Record<BadgeVariant, string> = {
   verified: "bg-brand-light text-brand font-medium",
   synced: "bg-brand-light text-brand font-medium",
   incomplete: "bg-amber-bg text-amber-field font-medium",
-  inprogress: "bg-blue-50 text-blue-700 font-medium",
+  inprogress: "bg-brand-light text-brand font-medium",
   pending: "bg-charcoal-50 text-charcoal-500 font-medium",
   draft: "bg-charcoal-50 text-charcoal-500 font-medium",
   correction: "bg-red-bg text-red-field font-medium",
@@ -24,7 +24,7 @@ const labels: Record<BadgeVariant, string> = {
 
 export default function Badge({ variant }: { variant: BadgeVariant }) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono tracking-wide ${variants[variant]}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ${variants[variant]}`}>
       {labels[variant]}
     </span>
   )

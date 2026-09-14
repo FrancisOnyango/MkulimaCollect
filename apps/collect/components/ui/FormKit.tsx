@@ -148,7 +148,7 @@ export function ToggleRow({ label, description, value, onValueChange }: { label:
         <Text style={styles.toggleLabel}>{label}</Text>
         {description ? <Text style={styles.toggleDescription}>{description}</Text> : null}
       </View>
-      <Switch value={value} onValueChange={onValueChange} trackColor={{ false: Colors.charcoal100, true: Colors.brandMid }} thumbColor="white" />
+      <Switch value={value} onValueChange={onValueChange} trackColor={{ false: Colors.charcoal100, true: Colors.brand }} thumbColor={Colors.brandInk} />
     </View>
   );
 }
@@ -165,7 +165,7 @@ export function Notice({ title, message, tone = "default" }: { title: string; me
 export function PrimaryButton({ label, onPress, loading, disabled }: { label: string; onPress(): void; loading?: boolean; disabled?: boolean }) {
   return (
     <Pressable accessibilityRole="button" disabled={disabled || loading} onPress={onPress} style={[styles.primaryButton, disabled || loading ? styles.buttonDisabled : null]}>
-      {loading ? <ActivityIndicator color="white" /> : <Text style={styles.primaryButtonText}>{label}</Text>}
+      {loading ? <ActivityIndicator color={Colors.brandInk} /> : <Text style={styles.primaryButtonText}>{label}</Text>}
     </Pressable>
   );
 }
@@ -216,14 +216,14 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   footer: {
-    backgroundColor: "white",
+    backgroundColor: Colors.card,
     borderTopColor: Colors.charcoal100,
     borderTopWidth: 1,
     padding: 16,
   },
   header: {
-    backgroundColor: Colors.brandDark,
-    borderRadius: 8,
+    backgroundColor: Colors.ink,
+    borderRadius: 24,
     padding: 18,
     marginBottom: 14,
   },
@@ -233,52 +233,53 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   eyebrow: {
-    color: "#D7E9DE",
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0,
+    color: Colors.brandMid,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.6,
     textTransform: "uppercase",
   },
   stepPill: {
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderColor: "rgba(255,255,255,0.25)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.2)",
     borderRadius: 999,
     borderWidth: 1,
-    color: "white",
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "700",
     paddingHorizontal: 10,
     paddingVertical: 5,
+    overflow: "hidden",
   },
   title: {
-    color: "white",
+    color: "#FFFFFF",
     fontSize: 28,
-    fontWeight: "800",
+    fontWeight: "700",
     lineHeight: 34,
     marginTop: 12,
   },
   description: {
-    color: "#E7F0EA",
+    color: "rgba(255,255,255,0.7)",
     fontSize: 14,
     lineHeight: 20,
     marginTop: 8,
   },
   progressTrack: {
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.15)",
     borderRadius: 999,
-    height: 7,
+    height: 6,
     marginTop: 16,
     overflow: "hidden",
   },
   progressFill: {
-    backgroundColor: "#F2C94C",
+    backgroundColor: Colors.brand,
     borderRadius: 999,
-    height: 7,
+    height: 6,
   },
   section: {
-    backgroundColor: "white",
+    backgroundColor: Colors.card,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 22,
     borderWidth: 1,
     marginTop: 12,
     padding: 16,
@@ -292,7 +293,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: Colors.charcoal,
     fontSize: 17,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   sectionDescription: {
     color: Colors.charcoal500,
@@ -306,16 +307,16 @@ const styles = StyleSheet.create({
   label: {
     color: Colors.charcoal700,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "700",
     marginBottom: 7,
   },
   required: {
     color: Colors.redField,
   },
   input: {
-    backgroundColor: Colors.brandMuted,
+    backgroundColor: Colors.surface,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 16,
     borderWidth: 1,
     color: Colors.charcoal,
     fontSize: 15,
@@ -335,30 +336,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   choice: {
-    backgroundColor: Colors.brandMuted,
+    backgroundColor: Colors.surface,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   choiceActive: {
-    backgroundColor: Colors.brandLight,
+    backgroundColor: Colors.brand,
     borderColor: Colors.brand,
   },
   choiceText: {
     color: Colors.charcoal700,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   choiceTextActive: {
-    color: Colors.brandDark,
+    color: Colors.brandInk,
   },
   toggleRow: {
     alignItems: "center",
-    backgroundColor: Colors.brandMuted,
+    backgroundColor: Colors.surface,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
   toggleLabel: {
     color: Colors.charcoal,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   toggleDescription: {
     color: Colors.charcoal500,
@@ -383,7 +384,7 @@ const styles = StyleSheet.create({
   notice: {
     backgroundColor: Colors.brandMuted,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 16,
     borderWidth: 1,
     marginTop: 12,
     padding: 13,
@@ -394,7 +395,7 @@ const styles = StyleSheet.create({
   },
   noticeWarning: {
     backgroundColor: Colors.amberBg,
-    borderColor: "#F59E0B",
+    borderColor: Colors.amberField,
   },
   noticeDanger: {
     backgroundColor: Colors.redBg,
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
   noticeTitle: {
     color: Colors.charcoal,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   noticeDangerText: {
     color: Colors.redField,
@@ -417,7 +418,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignItems: "center",
     backgroundColor: Colors.brand,
-    borderRadius: 8,
+    borderRadius: 999,
     minHeight: 50,
     justifyContent: "center",
     paddingHorizontal: 16,
@@ -427,15 +428,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.charcoal300,
   },
   primaryButtonText: {
-    color: "white",
+    color: Colors.brandInk,
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   secondaryButton: {
     alignItems: "center",
-    backgroundColor: "white",
+    backgroundColor: Colors.card,
     borderColor: Colors.charcoal100,
-    borderRadius: 8,
+    borderRadius: 999,
     borderWidth: 1,
     minHeight: 50,
     justifyContent: "center",
@@ -448,7 +449,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: Colors.charcoal700,
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   secondaryDisabledText: {
     color: Colors.charcoal300,
@@ -480,7 +481,7 @@ const styles = StyleSheet.create({
     color: Colors.charcoal,
     flex: 1,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "700",
     textAlign: "right",
   },
   successText: {

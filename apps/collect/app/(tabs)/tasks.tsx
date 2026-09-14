@@ -79,13 +79,13 @@ export default function TasksScreen() {
         keyExtractor={(item) => item.id}
         ListEmptyComponent={<Text style={{ color: Colors.charcoal500, marginTop: 24 }}>No local tasks yet.</Text>}
         renderItem={({ item }) => (
-          <View style={{ backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10, opacity: item.status === "COMPLETED" ? 0.55 : 1 }}>
+          <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10, opacity: item.status === "COMPLETED" ? 0.55 : 1 }}>
             <Text style={{ color: Colors.charcoal, fontWeight: "700", fontSize: 16 }}>{item.title}</Text>
             {item.detail ? <Text style={{ color: Colors.charcoal500, marginTop: 4 }}>{item.detail}</Text> : null}
             <Text style={{ color: Colors.charcoal500, marginTop: 6 }}>{item.priority} - {item.status}</Text>
             {item.status !== "COMPLETED" ? (
               <Pressable accessibilityRole="button" onPress={() => void handleDone(item.id)} style={{ alignSelf: "flex-start", backgroundColor: Colors.brand, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 10 }}>
-                <Text style={{ color: "white", fontWeight: "700" }}>Done</Text>
+                <Text style={{ color: Colors.brandInk, fontWeight: "700" }}>Done</Text>
               </Pressable>
             ) : null}
           </View>

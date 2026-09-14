@@ -3,6 +3,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { FormScreen, Notice, PrimaryButton, SectionCard, StepHeader, TextField } from "@/components/ui/FormKit";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { saveIdentity } from "@/features/farmers/identityRepository";
+import { upsertCollectionSession } from "@/features/farmers/collectionSessionRepository";
+import { hashIdentifier, lastDigits } from "@/lib/pii";
 
 export default function IdentityStep() {
   const db = useDatabase();
@@ -27,17 +29,22 @@ export default function IdentityStep() {
     setError(null);
 
     try {
+      const compactId = nationalId.trim();
+      const compactPhone = phoneNumber.trim();
       const operationUuid = await saveIdentity(db, {
         farmerId,
         fullLegalName: fullLegalName.trim(),
         firstName: firstName.trim(),
         surname: surname.trim(),
-        primaryPhoneLast4: phoneNumber.trim().slice(-4) || undefined,
-        nationalIdType: nationalId.trim() ? "NATIONAL_ID" : undefined,
-        nationalIdLast3: nationalId.trim().slice(-3) || undefined,
+        primaryPhoneHash: compactPhone ? hashIdentifier(compactPhone, "phone") : undefined,
+        primaryPhoneLast4: compactPhone ? lastDigits(compactPhone, 4) : undefined,
+        nationalIdType: compactId ? "NATIONAL_ID" : undefined,
+        nationalIdHash: compactId ? hashIdentifier(compactId, "national-id") : undefined,
+        nationalIdLast3: compactId ? lastDigits(compactId, 3) : undefined,
         dependsOn,
       });
 
+      await upsertCollectionSession(db, { farmerId, currentStep: "membership" });
       router.push({ pathname: "/collect/membership", params: { farmerId, dependsOn: operationUuid } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save identity");
@@ -64,7 +71,7 @@ export default function IdentityStep() {
 
       <SectionCard title="Matching references" description="Optional today, but valuable for deduplication and later credit/payment verification.">
         <TextField label="Primary phone number" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" placeholder="07xx xxx xxx" />
-        <TextField label="National ID or registration number" value={nationalId} onChangeText={setNationalId} keyboardType="number-pad" placeholder="Optional" />
+        <TextField label="National ID or registration number" value={nationalId} onChangeText={setNationalId} keyboardType="number-pad" placeholder="Hashed on device. Only last 3 digits are stored." />
       </SectionCard>
 
       {error ? <Notice title={error} tone="danger" /> : null}

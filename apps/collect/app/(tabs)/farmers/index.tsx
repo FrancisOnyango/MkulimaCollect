@@ -37,8 +37,8 @@ export default function FarmersScreen() {
           <Text style={{ color: Colors.brand, fontSize: 26, fontWeight: "700" }}>Farmers</Text>
           <Text style={{ color: Colors.charcoal500 }}>{farmers.length} local profiles</Text>
         </View>
-        <Pressable accessibilityRole="button" onPress={() => router.push("/collect")} style={{ backgroundColor: Colors.brand, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 }}>
-          <Text style={{ color: "white", fontWeight: "700" }}>New</Text>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/collect")} style={{ backgroundColor: Colors.brand, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 }}>
+          <Text style={{ color: Colors.brandInk, fontWeight: "700" }}>New</Text>
         </Pressable>
       </View>
 
@@ -53,7 +53,7 @@ export default function FarmersScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push({ pathname: "/(tabs)/farmers/[farmerId]", params: { farmerId: item.id } })}
-              style={{ backgroundColor: "white", borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10 }}
+              style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 12, padding: 14, marginBottom: 10 }}
             >
               <Text style={{ color: Colors.charcoal, fontWeight: "700", fontSize: 16 }}>{name}</Text>
               <Text style={{ color: Colors.charcoal500, marginTop: 4 }}>{item.status} - {item.completenessPct}% complete</Text>

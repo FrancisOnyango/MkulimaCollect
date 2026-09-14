@@ -18,7 +18,7 @@ type Screen =
   | { id: "main"; tab: Tab }
   | { id: "farmer-profile"; farmerId: string }
   | { id: "new-farmer" }
-  | { id: "gps-map" }
+  | { id: "gps-map"; farmId: string }
   | { id: "sync" }
   | { id: "submit-success" }
 
@@ -27,113 +27,91 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("home")
   const [isOffline, setIsOffline] = useState(false)
 
-  const navigate = (s: Screen) => setScreen(s)
-  const goMain = (t?: Tab) => {
-    if (t) setTab(t)
-    setScreen({ id: "main", tab: t || tab })
+  const goMain = (nextTab?: Tab) => {
+    if (nextTab) setTab(nextTab)
+    setScreen({ id: "main", tab: nextTab || tab })
   }
 
-  const statusLabel = isOffline ? "Offline-safe mode" : "Connected • 17 queued"
+  const showNav = screen.id === "main" || screen.id === "farmer-profile" || screen.id === "sync"
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.14),_transparent_32%),linear-gradient(180deg,_#131a1a_0%,_#0a1112_100%)] p-4">
-      <div className="absolute inset-x-0 top-6 mx-auto w-[220px] rounded-full border border-white/10 bg-white/5 px-4 py-2 text-center text-[10px] font-medium uppercase tracking-[0.32em] text-white/70 backdrop-blur-md">
-        MkulimaCollect • {statusLabel}
-      </div>
-
-      {/* Phone shell */}
+    <div className="h-full bg-[#E2E4E3] flex justify-center">
       <div
         role="application"
-        aria-label="MkulimaCollect mobile preview"
-        tabIndex={0}
-        className="relative mt-8 flex flex-col overflow-hidden bg-[#F7F9F7] border border-white/10"
-        style={{ width: 390, height: 844, borderRadius: 44, boxShadow: "0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)" }}
+        aria-label="MkulimaCollect"
+        className="relative w-full max-w-[430px] h-full bg-surface flex flex-col overflow-hidden border-x border-charcoal-100"
       >
-        {/* Notch */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-8 bg-charcoal rounded-b-2xl z-50" />
-
         {screen.id === "login" && (
           <LoginScreen onLogin={() => goMain("home")} />
         )}
 
         {screen.id === "main" && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-hidden flex flex-col">
-              {tab === "home" && (
-                <HomeScreen
-                  isOffline={isOffline}
-                  onNavigateSync={() => navigate({ id: "sync" })}
-                  onCollect={() => navigate({ id: "new-farmer" })}
-                />
-              )}
-              {tab === "farmers" && (
-                <FarmersScreen
-                  onSelectFarmer={id => navigate({ id: "farmer-profile", farmerId: id })}
-                />
-              )}
-              {tab === "tasks" && <TasksScreen />}
-              {tab === "more" && (
-                <MoreScreen
-                  onSync={() => navigate({ id: "sync" })}
-                  isOffline={isOffline}
-                  onToggleOffline={() => setIsOffline(o => !o)}
-                />
-              )}
-            </div>
-            <BottomNav
-              activeTab={tab}
-              onTabChange={t => { setTab(t); setScreen({ id: "main", tab: t }) }}
-              onCollect={() => navigate({ id: "new-farmer" })}
-            />
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            {tab === "home" && (
+              <HomeScreen
+                isOffline={isOffline}
+                onNavigateSync={() => setScreen({ id: "sync" })}
+                onCollect={() => setScreen({ id: "new-farmer" })}
+              />
+            )}
+            {tab === "farmers" && (
+              <FarmersScreen
+                onSelectFarmer={id => setScreen({ id: "farmer-profile", farmerId: id })}
+              />
+            )}
+            {tab === "tasks" && <TasksScreen />}
+            {tab === "more" && (
+              <MoreScreen
+                onSync={() => setScreen({ id: "sync" })}
+                isOffline={isOffline}
+                onToggleOffline={() => setIsOffline(value => !value)}
+                onSignOut={() => setScreen({ id: "login" })}
+              />
+            )}
           </div>
         )}
 
         {screen.id === "farmer-profile" && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <FarmerProfileScreen
-              farmerId={screen.farmerId}
-              onBack={() => goMain("farmers")}
-              onCollect={() => navigate({ id: "new-farmer" })}
-            />
-            <BottomNav
-              activeTab={tab}
-              onTabChange={t => { setTab(t); setScreen({ id: "main", tab: t }) }}
-              onCollect={() => navigate({ id: "new-farmer" })}
-            />
-          </div>
+          <FarmerProfileScreen
+            farmerId={screen.farmerId}
+            onBack={() => goMain("farmers")}
+            onCollect={() => setScreen({ id: "new-farmer" })}
+          />
         )}
 
         {screen.id === "new-farmer" && (
           <NewFarmerScreen
             onBack={() => goMain()}
-            onGpsMap={() => navigate({ id: "gps-map" })}
-            onComplete={() => navigate({ id: "submit-success" })}
+            onGpsMap={farmId => setScreen({ id: "gps-map", farmId })}
+            onComplete={() => setScreen({ id: "submit-success" })}
           />
         )}
 
         {screen.id === "gps-map" && (
           <GpsMapScreen
-            onBack={() => navigate({ id: "new-farmer" })}
-            onSave={() => navigate({ id: "new-farmer" })}
+            farmId={screen.farmId}
+            onBack={() => setScreen({ id: "new-farmer" })}
+            onSave={() => setScreen({ id: "new-farmer" })}
           />
         )}
 
         {screen.id === "sync" && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <SyncScreen
-              onBack={() => goMain()}
-              isOffline={isOffline}
-            />
-            <BottomNav
-              activeTab={tab}
-              onTabChange={t => { setTab(t); setScreen({ id: "main", tab: t }) }}
-              onCollect={() => navigate({ id: "new-farmer" })}
-            />
-          </div>
+          <SyncScreen
+            onBack={() => goMain()}
+            isOffline={isOffline}
+          />
         )}
 
         {screen.id === "submit-success" && (
           <SubmitSuccessScreen onDone={() => goMain("farmers")} />
+        )}
+
+        {showNav && (
+          <BottomNav
+            activeTab={tab}
+            onTabChange={next => goMain(next)}
+            onCollect={() => setScreen({ id: "new-farmer" })}
+          />
         )}
       </div>
     </div>

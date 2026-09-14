@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { ChoiceGroup, FormScreen, Notice, PrimaryButton, SectionCard, StepHeader, TextField, ToggleRow } from "@/components/ui/FormKit";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { getPrimaryAffiliationByFarmer, saveAffiliation, type SaveAffiliationInput } from "@/features/affiliations/affiliationRepository";
+import { upsertCollectionSession } from "@/features/farmers/collectionSessionRepository";
 
 const institutionTypes = ["COOPERATIVE", "SACCO", "AGGREGATOR", "BUYER", "FARMER_GROUP", "NONE"] as const;
 
@@ -79,7 +80,7 @@ export default function MembershipStep() {
       }
 
       const { operationUuid } = await saveAffiliation(db, input);
-
+      await upsertCollectionSession(db, { farmerId: params.farmerId, currentStep: "farm" });
       router.push({ pathname: "/collect/farm", params: { farmerId: params.farmerId, dependsOn: operationUuid } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save membership");

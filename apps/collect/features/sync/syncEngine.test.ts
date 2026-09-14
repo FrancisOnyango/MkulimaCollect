@@ -20,6 +20,7 @@ vi.mock('./SyncOutbox', () => ({
   markSyncing: vi.fn(async () => {}),
   markSynced: vi.fn(async () => {}),
   markRetry: vi.fn(async () => {}),
+  markConflict: vi.fn(async () => {}),
 }));
 
 // Mock syncAttemptRepository so run doesn't fail
