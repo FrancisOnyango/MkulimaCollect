@@ -1,0 +1,17 @@
+---
+description: Each agricultural value chain has unique collection fields
+alwaysApply: true
+---
+
+# Unique sector data points
+
+Every value chain has its own production, market, cost, risk, and evidence fields. Do not reuse a generic crop, perennial, or livestock form.
+
+- Dairy is not a template for poultry, meat, or aquaculture.
+- Maize is not a template for rice, beans, potato, tomato, or horticulture.
+- Tea, coffee, avocado, and macadamia each have factory, cherry, export, or nut-specific fields.
+- Field `id`s must be unique to the chain (for example `greenLeafKgMonth`, not a shared `expectedHarvest`).
+- Evidence categories stay chain-specific (milk slip, factory slip, movement permit, pond photo).
+- Shared helpers are allowed only when the caller passes chain-specific ids, labels, units, and evidence.
+
+Source of truth: `apps/collect/features/sectors/sectorSchemas.ts` and `src/sectors.ts`. Keep both surfaces aligned.

@@ -1,0 +1,1 @@
+"""MkulimaCollect mobile ingestion pipeline."""

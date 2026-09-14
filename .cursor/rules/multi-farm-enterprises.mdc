@@ -1,0 +1,13 @@
+---
+description: Farmers have many farms; farms have many enterprises
+alwaysApply: true
+---
+
+# Multiple farms and enterprises
+
+A farmer can own or operate more than one farm. Each farm can run more than one enterprise.
+
+- Do not model a farmer as a single farm or a single sector.
+- Persist farms as a list. Persist enterprises against a specific `farmId`.
+- After saving a farm or finishing an enterprise, return to a holdings list so the agent can add another farm or another enterprise.
+- Sector forms stay unique to the chain, and are scoped to that farm × enterprise pair.

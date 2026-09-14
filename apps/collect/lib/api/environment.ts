@@ -11,5 +11,8 @@ export function getAppEnvironment(): AppEnvironment {
 }
 
 export function usesRemoteApi(environment: AppEnvironment = getAppEnvironment()): boolean {
-  return environment === "preview" || environment === "production";
+  if (environment === "preview" || environment === "production") {
+    return true;
+  }
+  return Boolean(process.env.EXPO_PUBLIC_API_BASE_URL?.trim());
 }

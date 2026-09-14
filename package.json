@@ -11,6 +11,8 @@
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:e2e": "playwright test --reporter=dot",
+    "ingestion": "python -m uvicorn app.main:app --app-dir services/ingestion --reload --host 127.0.0.1 --port 8088",
+    "ingestion:test": "python -m pytest services/ingestion/tests -q",
     "install:browsers": "playwright install --with-deps",
     "format": "oxfmt"
   },
