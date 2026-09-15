@@ -14,7 +14,7 @@ permissions:
 jobs:
   android-preview-apk:
     name: Android standalone preview APK
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     env:
       CI: true
