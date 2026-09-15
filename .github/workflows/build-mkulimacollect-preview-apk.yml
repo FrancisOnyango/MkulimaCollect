@@ -2,9 +2,14 @@ name: Build MkulimaCollect Preview APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "apps/collect/**"
+      - ".github/workflows/build-mkulimacollect-preview-apk.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   android-preview-apk:
@@ -15,12 +20,14 @@ jobs:
       CI: true
       EXPO_NO_TELEMETRY: "1"
       EXPO_PUBLIC_ENVIRONMENT: "preview"
+      EXPO_PUBLIC_API_BASE_URL: "https://staging-api.mkulimascore.com"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           lfs: true
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -121,3 +128,24 @@ jobs:
           name: MkulimaCollect-preview-apk
           path: apps/collect/android/app/build/outputs/apk/release/MkulimaCollect-preview.apk
           if-no-files-found: error
+
+      - name: Commit staging preview APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_src="apps/collect/android/app/build/outputs/apk/release/MkulimaCollect-preview.apk"
+          cp "$apk_src" "$RUNNER_TEMP/MkulimaCollect-preview.apk"
+          git reset --hard HEAD
+          git clean -fd
+          mkdir -p artifacts
+          cp "$RUNNER_TEMP/MkulimaCollect-preview.apk" artifacts/MkulimaCollect-preview.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/MkulimaCollect-preview.apk
+          if git diff --cached --quiet; then
+            echo "Preview APK is unchanged."
+            exit 0
+          fi
+          git commit -m "Update the tracked staging preview APK."
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
