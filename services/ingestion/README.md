@@ -39,10 +39,20 @@ Inspect staging vs platform:
 
 ## Live feed into staging / production RDS
 
-`https://api.mkulimascore.com` is the canonical API that writes MkulimaScore RDS.
-`https://staging-api.mkulimascore.com` currently exposes login only — it does **not** implement `/api/v1/mobile/sync` or `/api/v1/pipeline/ingest-score`.
+`https://api.mkulimascore.com` is the canonical MkulimaScore API (farmers, geo, ingest-score, RDS).
+It has **no** `/api/v1/mobile/*` routes.
 
-Copy `.env.example` to `.env` and set a platform service user:
+`https://staging-api.mkulimascore.com` is Collect's mobile ingestion host (CloudFront → Elastic Beanstalk `mkulimacollect-ingest-stg`).
+Collect preview and production builds must use that URL.
+
+After canonicalization, this service forwards into the core API:
+
+1. `POST /api/v1/farmers/`
+2. `POST /api/v1/identity/references`
+3. `POST /api/v1/geo/locations` when GPS exists
+4. `POST /api/v1/pipeline/ingest-score` when a chain-specific sector payload exists
+
+Set a platform service user on the ingestion host (never on the phone):
 
 ```
 PLATFORM_API_URL=https://api.mkulimascore.com
@@ -50,34 +60,14 @@ PLATFORM_API_USERNAME=...
 PLATFORM_API_PASSWORD=...
 ```
 
-After each canonical farmer, farm, enterprise, or sector form, the pipeline:
+`GET /api/v1/pipeline/status` reports `platform_hop.auth_configured` and the last forward errors.
 
-1. `POST /api/v1/farmers/`
-2. `POST /api/v1/identity/references`
-3. `POST /api/v1/geo/locations` when GPS exists
-4. `POST /api/v1/pipeline/ingest-score` when a chain-specific sector payload exists
-
-Optional: set `DATABASE_URL` to a PostgreSQL URL if ingestion staging tables should also live on RDS. That is separate from canonical `farmers` tables.
+Optional: set `DATABASE_URL` to PostgreSQL if ingestion staging tables should also live on RDS. That is separate from canonical `farmers` tables.
 
 ## Live staging
 
 `https://staging-api.mkulimascore.com` now fronts this service (CloudFront → Elastic Beanstalk `mkulimacollect-ingest-stg`).
 
-Collect preview already uses that URL. Sign in as `francis.o@mkulima` / `dev-password`.
+Collect preview and production already use that URL. Sign in as `francis.o@mkulima` / `dev-password`.
 
-RDS forward into `https://api.mkulimascore.com` is configured as the next hop and still needs a MkulimaScore API user (`PLATFORM_API_USERNAME` / `PLATFORM_API_PASSWORD` on the EB environment).
-
-`https://staging-api.mkulimascore.com` is a separate `farmer-api` with login only.
-`https://api.mkulimascore.com` is the scoring platform and does write RDS, but it has no `/api/v1/mobile/*` routes.
-
-Collect was pointed at those hosts in `eas.json`. Neither one implements the mobile sync contract, so field data never reaches RDS.
-
-Fix: deploy **this** service (the mobile contract) and keep Collect pointed at it. After canonicalization it forwards into `api.mkulimascore.com`, which writes RDS.
-
-```bash
-cd services/ingestion
-docker build -t mkulimacollect-ingestion .
-docker run --rm -p 8088:8088 --env-file .env mkulimacollect-ingestion
-```
-
-Then set Collect `EXPO_PUBLIC_API_BASE_URL` to that public HTTPS URL, not to `staging-api.mkulimascore.com`.
+RDS forward into `https://api.mkulimascore.com` needs `PLATFORM_API_USERNAME` / `PLATFORM_API_PASSWORD` (or `PLATFORM_API_TOKEN`) on the EB environment. Without those, canonical records stay in ingestion `platform_*` tables and `pipeline/status` shows `platform_api_auth_not_configured`.

@@ -2,9 +2,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Colors } from "@/constants/colors";
+import { ScreenShell, usePhoneLayout } from "@/components/ui/ScreenShell";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { getActiveSession, resumePathForSession } from "@/features/farmers/collectionSessionRepository";
-import { sectorCatalog, sectorGroups } from "@/features/sectors/catalog";
+import { getSectorsByGroup, sectorCatalog, sectorGroups } from "@/features/sectors/catalog";
 import { useSyncStatus } from "@/features/sync/useSyncStatus";
 import { useDatabase } from "@/components/providers/DBProvider";
 
@@ -41,12 +42,14 @@ export default function HomeScreen() {
     router.replace("/(auth)/login");
   }
 
+  const { pad, compact } = usePhoneLayout();
+
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScreenShell padded={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: pad }]} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
           <Text style={styles.eyebrow}>MkulimaCollect field console</Text>
-          <Text style={styles.title}>Production data ready for MkulimaScore.</Text>
+          <Text style={[styles.title, compact ? styles.titleCompact : null]}>Production data ready for MkulimaScore.</Text>
           <Text style={styles.subtitle}>
             {agent?.name ?? "Field agent"} · {agent?.orgName ?? "Organization"}{agent?.clusterName ? ` · ${agent.clusterName}` : ""}
           </Text>
@@ -91,13 +94,13 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Sector coverage</Text>
-            <Text style={styles.sectionText}>Dairy is supported, but the intake is designed for crops, horticulture, livestock, aquaculture, and perennial enterprises.</Text>
+            <Text style={styles.sectionText}>Forty value chains across annual crops, horticulture, perennial crops, livestock, and aquaculture. Priority engines are listed first.</Text>
           </View>
           {sectorGroups.map((group) => (
             <View key={group} style={styles.groupBlock}>
               <Text style={styles.groupTitle}>{group}</Text>
               <View style={styles.chipWrap}>
-                {sectorCatalog.filter((sector) => sector.group === group).map((sector) => (
+                {getSectorsByGroup(group).map((sector) => (
                   <View key={sector.id} style={styles.chip}>
                     <Text style={styles.chipText}>{sector.label}</Text>
                   </View>
@@ -133,7 +136,7 @@ export default function HomeScreen() {
           <Text style={styles.logoutText}>Sign out</Text>
         </Pressable>
       </ScrollView>
-    </View>
+    </ScreenShell>
   );
 }
 
@@ -154,8 +157,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 18,
-    paddingBottom: 34,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
   hero: {
     backgroundColor: Colors.ink,
@@ -171,10 +174,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#FFFFFF",
-    fontSize: 27,
+    fontSize: 24,
     fontWeight: "700",
-    lineHeight: 33,
+    lineHeight: 30,
     marginTop: 10,
+  },
+  titleCompact: {
+    fontSize: 20,
+    lineHeight: 26,
   },
   subtitle: {
     color: "rgba(255,255,255,0.7)",

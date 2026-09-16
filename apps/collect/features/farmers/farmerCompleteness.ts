@@ -1,11 +1,12 @@
 import { eq, inArray } from "drizzle-orm";
 import type { AppDatabase } from "@/lib/db/database";
-import { affiliations, consents, enterprises, evidence, farmerIdentities, farmers, farmGeometries, farms, productionObservations } from "@/lib/db/schema";
+import { affiliations, consents, enterprises, evidence, farmerIdentities, farmers, farmGeometries, farms, plots, productionObservations } from "@/lib/db/schema";
 import { getSectorMeta } from "@/features/sectors/catalog";
 
 export type CompletenessResult = {
   percent: number;
   missing: string[];
+  warnings: string[];
 };
 
 export async function calculateCompleteness(db: AppDatabase, farmerId: string): Promise<number> {
@@ -17,13 +18,14 @@ export async function calculateCompletenessDetails(db: AppDatabase, farmerId: st
   const [farmer] = await db.select().from(farmers).where(eq(farmers.id, farmerId)).limit(1);
 
   if (!farmer) {
-    return { percent: 0, missing: ["Farmer draft not found"] };
+    return { percent: 0, missing: ["Farmer draft not found"], warnings: [] };
   }
 
   const [identity] = await db.select().from(farmerIdentities).where(eq(farmerIdentities.farmerId, farmerId)).limit(1);
   const [consent] = await db.select().from(consents).where(eq(consents.farmerId, farmerId)).limit(1);
   const [affiliation] = await db.select().from(affiliations).where(eq(affiliations.farmerId, farmerId)).limit(1);
   const farmRows = await db.select().from(farms).where(eq(farms.farmerId, farmerId));
+  const plotRows = await db.select().from(plots).where(eq(plots.farmerId, farmerId));
   const enterpriseRows = await db.select().from(enterprises).where(eq(enterprises.farmerId, farmerId));
   const farmIds = farmRows.map((farm) => farm.id);
   const enterpriseIds = enterpriseRows.map((enterprise) => enterprise.id);
@@ -35,6 +37,7 @@ export async function calculateCompletenessDetails(db: AppDatabase, farmerId: st
 
   let score = 0;
   const missing: string[] = [];
+  const warnings: string[] = [];
 
   if (identity?.fullLegalName || identity?.firstName) {
     score += 10;
@@ -64,9 +67,12 @@ export async function calculateCompletenessDetails(db: AppDatabase, farmerId: st
         missing.push(`Farm "${farm.name ?? farm.id}" GPS pin`);
       }
       if (!geometry) {
-        missing.push(`Farm "${farm.name ?? farm.id}" boundary`);
+        warnings.push(`Farm "${farm.name ?? farm.id}" walked boundary can be captured later`);
       }
-      return Boolean(hasPin && geometry);
+      if (!plotRows.some((plot) => plot.farmId === farm.id)) {
+        warnings.push(`Farm "${farm.name ?? farm.id}" still needs a plot or production unit`);
+      }
+      return hasPin;
     }).length;
     score += Math.round((30 * completeFarms) / farmRows.length);
   }
@@ -103,5 +109,5 @@ export async function calculateCompletenessDetails(db: AppDatabase, farmerId: st
     score += Math.round((40 * completeEnterprises) / enterpriseRows.length);
   }
 
-  return { percent: Math.min(100, score), missing };
+  return { percent: Math.min(100, score), missing, warnings };
 }

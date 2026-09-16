@@ -36,6 +36,8 @@ export async function getOrCreateActiveProductionCycle(
       enterpriseId,
       sector,
       name: `${sector} active cycle`,
+      cycleType: "season",
+      stage: "active",
       startedAt: now,
       endedAt: null,
       status: "ACTIVE",
@@ -166,6 +168,62 @@ export async function getActiveProductionCycle(db: AppDatabase, enterpriseId: st
     .where(sql`${productionCycles.enterpriseId} = ${enterpriseId} AND ${productionCycles.status} = 'ACTIVE'`)
     .limit(1);
   return rows[0] ?? null;
+}
+
+export async function getProductionCyclesByEnterprise(db: AppDatabase, enterpriseId: string) {
+  return db.select().from(productionCycles).where(eq(productionCycles.enterpriseId, enterpriseId)).orderBy(desc(productionCycles.createdAt));
+}
+
+export async function createNamedProductionCycle(
+  db: AppDatabase,
+  input: { enterpriseId: string; sector: string; name: string; cycleType: string; stage?: string; startedAt?: string; dependsOn?: string[] },
+): Promise<{ cycleId: string; operationUuid: string }> {
+  const cycleId = Crypto.randomUUID();
+  const now = new Date().toISOString();
+  let operationUuid = "";
+
+  await db.transaction(async (tx) => {
+    await tx.insert(productionCycles).values({
+      id: cycleId,
+      enterpriseId: input.enterpriseId,
+      sector: input.sector,
+      name: input.name,
+      cycleType: input.cycleType,
+      stage: input.stage ?? "started",
+      startedAt: input.startedAt ?? now,
+      endedAt: null,
+      status: "ACTIVE",
+      localVersion: 1,
+      createdAt: now,
+      updatedAt: now,
+      syncedAt: null,
+    });
+
+    operationUuid = await enqueueOutboxEntry(tx, {
+      entityType: "production_cycle",
+      entityId: cycleId,
+      mutationType: "CREATE",
+      payload: {
+        productionCycleLocalUuid: cycleId,
+        enterpriseLocalUuid: input.enterpriseId,
+        sector: input.sector,
+        name: input.name,
+        cycleType: input.cycleType,
+        stage: input.stage ?? "started",
+        startedAt: input.startedAt ?? now,
+      },
+      dependsOn: input.dependsOn ?? [],
+    });
+  });
+
+  return { cycleId, operationUuid };
+}
+
+export async function closeProductionCycle(db: AppDatabase, cycleId: string): Promise<void> {
+  await db
+    .update(productionCycles)
+    .set({ status: "CLOSED", endedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
+    .where(eq(productionCycles.id, cycleId));
 }
 
 export async function getProductionObservationsByEnterprise(db: AppDatabase, enterpriseId: string): Promise<(typeof productionObservations.$inferSelect)[]> {

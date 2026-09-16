@@ -161,12 +161,81 @@ export const affiliations = sqliteTable(
   }),
 );
 
+export const plots = sqliteTable(
+  "plots",
+  {
+    id: text("id").primaryKey(),
+    farmerId: text("farmer_id").notNull().references(() => farmers.id),
+    farmId: text("farm_id").notNull().references(() => farms.id),
+    name: text("name").notNull(),
+    unitType: text("unit_type").notNull(),
+    areaHa: real("area_ha"),
+    notes: text("notes"),
+    localVersion: integer("local_version").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    syncedAt: text("synced_at"),
+  },
+  (table) => ({
+    farmIdx: index("idx_plots_farm").on(table.farmId),
+    farmerIdx: index("idx_plots_farmer").on(table.farmerId),
+  }),
+);
+
+export const householdMembers = sqliteTable(
+  "household_members",
+  {
+    id: text("id").primaryKey(),
+    farmerId: text("farmer_id").notNull().references(() => farmers.id),
+    fullName: text("full_name").notNull(),
+    role: text("role").notNull(),
+    labourContribution: text("labour_contribution"),
+    localVersion: integer("local_version").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    syncedAt: text("synced_at"),
+  },
+  (table) => ({
+    farmerIdx: index("idx_household_members_farmer").on(table.farmerId),
+  }),
+);
+
+export const visits = sqliteTable(
+  "visits",
+  {
+    id: text("id").primaryKey(),
+    farmerId: text("farmer_id").references(() => farmers.id),
+    agentId: text("agent_id").notNull(),
+    purpose: text("purpose").notNull(),
+    respondentRole: text("respondent_role"),
+    interviewLanguage: text("interview_language").notNull().default("en"),
+    outcome: text("outcome").notNull().default("partial"),
+    startedAt: text("started_at").notNull(),
+    endedAt: text("ended_at"),
+    nextVisitAt: text("next_visit_at"),
+    gpsLatitude: real("gps_latitude"),
+    gpsLongitude: real("gps_longitude"),
+    gpsAccuracyM: real("gps_accuracy_m"),
+    notes: text("notes"),
+    localVersion: integer("local_version").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    syncedAt: text("synced_at"),
+  },
+  (table) => ({
+    farmerIdx: index("idx_visits_farmer").on(table.farmerId),
+    agentIdx: index("idx_visits_agent").on(table.agentId),
+    purposeIdx: index("idx_visits_purpose").on(table.purpose),
+  }),
+);
+
 export const enterprises = sqliteTable(
   "enterprises",
   {
     id: text("id").primaryKey(),
     farmerId: text("farmer_id").notNull().references(() => farmers.id),
     farmId: text("farm_id").notNull().references(() => farms.id),
+    plotId: text("plot_id"),
     sector: text("sector").notNull(),
     status: text("status").notNull().default("DRAFT"),
     localVersion: integer("local_version").notNull().default(1),
@@ -177,6 +246,7 @@ export const enterprises = sqliteTable(
   (table) => ({
     farmerIdx: index("idx_enterprises_farmer").on(table.farmerId),
     farmIdx: index("idx_enterprises_farm").on(table.farmId),
+    plotIdx: index("idx_enterprises_plot").on(table.plotId),
     sectorIdx: index("idx_enterprises_sector").on(table.sector),
   }),
 );
@@ -188,6 +258,8 @@ export const productionCycles = sqliteTable(
     enterpriseId: text("enterprise_id").notNull().references(() => enterprises.id),
     sector: text("sector").notNull(),
     name: text("name").notNull(),
+    cycleType: text("cycle_type").notNull().default("season"),
+    stage: text("stage"),
     startedAt: text("started_at").notNull(),
     endedAt: text("ended_at"),
     status: text("status").notNull().default("ACTIVE"),
@@ -287,7 +359,9 @@ export const evidence = sqliteTable(
     id: text("id").primaryKey(),
     farmerId: text("farmer_id").notNull().references(() => farmers.id),
     farmId: text("farm_id"),
+    plotId: text("plot_id"),
     enterpriseId: text("enterprise_id"),
+    productionCycleId: text("production_cycle_id"),
     category: text("category").notNull(),
     localUri: text("local_uri").notNull(),
     mimeType: text("mime_type").notNull(),
@@ -446,6 +520,8 @@ export const collectionSessions = sqliteTable(
     id: text("id").primaryKey(),
     farmerId: text("farmer_id"),
     farmId: text("farm_id"),
+    plotId: text("plot_id"),
+    visitId: text("visit_id"),
     currentStep: text("current_step").notNull().default("consent"),
     stepStates: text("step_states").notNull().default("{}"),
     status: text("status").notNull().default("LOCAL_DRAFT"),

@@ -225,7 +225,7 @@ export default function GpsMapScreen({ farmId, onBack, onSave }: GpsMapScreenPro
           {mode === "idle" && (
             <div className="flex gap-2">
               <button type="button" onClick={onBack} className="flex-1 py-3.5 border border-charcoal-200 rounded-full text-sm font-medium text-charcoal">
-                Cancel
+                Skip for now
               </button>
               <button type="button" onClick={startWalk} className="flex-[2] py-3.5 bg-brand text-brand-ink rounded-full font-semibold text-sm">
                 Walk boundary
@@ -235,6 +235,9 @@ export default function GpsMapScreen({ farmId, onBack, onSave }: GpsMapScreenPro
 
           {mode === "walking" && (
             <div className="flex gap-2">
+              <button type="button" onClick={() => { stopWatch(); onBack() }} className="flex-1 py-3.5 border border-charcoal-200 rounded-full text-sm font-medium text-charcoal">
+                Skip for now
+              </button>
               <button type="button" onClick={() => captureOnce(true)} className="flex-1 py-3.5 border border-charcoal-200 rounded-full text-sm font-medium text-charcoal">
                 Add point
               </button>
@@ -246,6 +249,9 @@ export default function GpsMapScreen({ farmId, onBack, onSave }: GpsMapScreenPro
 
           {mode === "done" && (
             <div className="flex gap-2">
+              <button type="button" onClick={onBack} className="flex-1 py-3.5 border border-charcoal-200 rounded-full text-sm font-medium text-charcoal">
+                Skip for now
+              </button>
               <button
                 type="button"
                 onClick={() => { setMode("idle"); setPoints([]); setError(null) }}

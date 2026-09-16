@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from .config import DATA_DIR, settings
@@ -29,6 +29,7 @@ from .models import (
     utcnow,
 )
 from .pipeline import ENABLED_SECTORS, ingest_evidence, new_id, process_change
+from .platform import platform_hop_status
 from .security import current_principal, hash_password, issue_token, parse_token, Principal
 
 
@@ -518,6 +519,8 @@ def pipeline_status(principal: Principal = Depends(current_principal), db: Sessi
     def count(model) -> int:
         return int(db.scalar(select(func.count()).select_from(model)) or 0)
 
+    hop = platform_hop_status()
+    latest = db.scalars(select(PlatformScoreJob).order_by(desc(PlatformScoreJob.created_at)).limit(5)).all()
     return {
         "staging_records": count(StagingRecord),
         "platform_farmers": count(PlatformFarmer),
@@ -525,7 +528,20 @@ def pipeline_status(principal: Principal = Depends(current_principal), db: Sessi
         "platform_enterprises": count(PlatformEnterprise),
         "platform_records": count(PlatformRecord),
         "score_jobs": count(PlatformScoreJob),
-        "forwards_enabled": bool(settings.platform_api_url),
+        "forwards_enabled": bool(hop["host"] and hop["auth_configured"]),
+        "platform_hop": {
+            **hop,
+            "last_jobs": [
+                {
+                    "id": job.id,
+                    "msid": job.msid,
+                    "status": job.status,
+                    "forwarded": job.forwarded,
+                    "error": (job.detail or {}).get("error"),
+                }
+                for job in latest
+            ],
+        },
     }
 
 

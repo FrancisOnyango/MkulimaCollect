@@ -1,6 +1,7 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
+import { AppHeader, ScreenShell } from "@/components/ui/ScreenShell";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useApiClient } from "@/components/providers/APIProvider";
 import { useSyncStatus } from "@/features/sync/useSyncStatus";
@@ -11,6 +12,7 @@ export default function MoreScreen() {
   const { environment } = useApiClient();
   const { counts } = useSyncStatus();
   const waiting = counts.PENDING_SYNC + counts.RETRY;
+  const apiHost = process.env.EXPO_PUBLIC_API_BASE_URL || "https://staging-api.mkulimascore.com";
 
   async function handleLogout() {
     await logout();
@@ -18,35 +20,69 @@ export default function MoreScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.surface, padding: 24, justifyContent: "center" }}>
-      <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>More</Text>
-      <View style={{ marginTop: 18, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 22, padding: 16 }}>
-        <Text style={{ color: Colors.charcoal, fontWeight: "700" }}>{agent?.name ?? "Field agent"}</Text>
-        <Text style={{ color: Colors.charcoal500, marginTop: 4 }}>{agent?.orgName ?? "Organization"}</Text>
-        <Text style={{ color: Colors.charcoal500, marginTop: 4 }}>{agent?.clusterName ?? "Cluster"}</Text>
-        <Text style={{ color: Colors.charcoal500, marginTop: 4 }}>{environment} · v{getAppVersion()}</Text>
-      </View>
+    <ScreenShell padded={false}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 24 }}>
+        <AppHeader title="More" subtitle="Device, sync, and privacy" />
 
-      <Pressable accessibilityRole="button" onPress={() => router.push("/sync")} style={{ marginTop: 14, backgroundColor: Colors.brandMuted, borderRadius: 22, padding: 16 }}>
-        <Text style={{ color: Colors.brandDark, fontWeight: "700" }}>Sync Centre</Text>
-        <Text style={{ color: Colors.charcoal500, marginTop: 4 }}>{waiting} records waiting</Text>
-      </Pressable>
+        <View style={cardStyle}>
+          <Text style={titleStyle}>{agent?.name ?? "Field agent"}</Text>
+          <Text style={metaStyle}>{agent?.orgName ?? "Organization"}</Text>
+          <Text style={metaStyle}>{agent?.clusterName ?? "Cluster"}</Text>
+          <Text style={metaStyle}>{environment} · v{getAppVersion()}</Text>
+          <Text style={[metaStyle, { fontSize: 12 }]} numberOfLines={2}>{apiHost}</Text>
+        </View>
 
-      <Pressable accessibilityRole="button" onPress={() => router.push("/sync/conflicts")} style={{ marginTop: 14, backgroundColor: Colors.brandMuted, borderRadius: 22, padding: 16 }}>
-        <Text style={{ color: Colors.brandDark, fontWeight: "700" }}>Sync conflicts</Text>
-        <Text style={{ color: Colors.charcoal500, marginTop: 4 }}>Review server conflicts without silent merge</Text>
-      </Pressable>
+        <MenuRow title="Sync Centre" detail={`${waiting} records waiting`} onPress={() => router.push("/sync")} />
+        <MenuRow title="Sync conflicts" detail="Review server conflicts without silent merge" onPress={() => router.push("/sync/conflicts")} />
+        <MenuRow title="Farmers" detail="Open local farmer profiles" onPress={() => router.push("/(tabs)/farmers")} />
+        <MenuRow title="Work" detail="Assigned visits, follow-ups, and returned records" onPress={() => router.push("/(tabs)/tasks")} />
+        <MenuRow title="Start collection" detail="New farmer, farms, and enterprises" onPress={() => router.push("/collect/consent")} />
 
-      <View style={{ marginTop: 14, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.charcoal100, borderRadius: 22, padding: 16 }}>
-        <Text style={{ color: Colors.charcoal, fontWeight: "700" }}>Privacy</Text>
-        <Text style={{ color: Colors.charcoal500, marginTop: 6 }}>
-          National IDs and phone numbers are hashed on device. Evidence files stay in app-private storage. Screenshots of farmer records are blocked on Android. Scoring never runs on this device.
-        </Text>
-      </View>
+        <View style={cardStyle}>
+          <Text style={titleStyle}>Privacy</Text>
+          <Text style={[metaStyle, { lineHeight: 20 }]}>
+            National IDs and phone numbers are hashed on device. Evidence files stay in app-private storage. Screenshots of farmer records are blocked on Android. Scoring never runs on this device.
+          </Text>
+        </View>
 
-      <Pressable accessibilityRole="button" onPress={handleLogout} style={{ alignItems: "center", borderRadius: 999, borderWidth: 1, borderColor: Colors.charcoal100, paddingVertical: 14, marginTop: 18 }}>
-        <Text style={{ color: Colors.charcoal700, fontWeight: "700" }}>Sign out</Text>
-      </Pressable>
-    </View>
+        <Pressable accessibilityRole="button" onPress={handleLogout} style={signOutStyle}>
+          <Text style={{ color: Colors.charcoal700, fontWeight: "800" }}>Sign out</Text>
+        </Pressable>
+      </ScrollView>
+    </ScreenShell>
   );
 }
+
+function MenuRow({ title, detail, onPress }: { title: string; detail: string; onPress(): void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={rowStyle}>
+      <Text style={titleStyle}>{title}</Text>
+      <Text style={metaStyle}>{detail}</Text>
+    </Pressable>
+  );
+}
+
+const cardStyle = {
+  backgroundColor: Colors.card,
+  borderColor: Colors.charcoal100,
+  borderRadius: 18,
+  borderWidth: 1,
+  marginTop: 12,
+  padding: 16,
+};
+const rowStyle = {
+  ...cardStyle,
+  backgroundColor: Colors.brandMuted,
+  borderWidth: 0,
+};
+const titleStyle = { color: Colors.charcoal, fontWeight: "800" as const, fontSize: 16 };
+const metaStyle = { color: Colors.charcoal500, marginTop: 4 };
+const signOutStyle = {
+  alignItems: "center" as const,
+  borderColor: Colors.charcoal100,
+  borderRadius: 999,
+  borderWidth: 1,
+  justifyContent: "center" as const,
+  marginTop: 18,
+  minHeight: 50,
+};

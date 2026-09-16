@@ -6,11 +6,14 @@ import { collectionSessions } from "@/lib/db/schema";
 export type CollectionStep =
   | "consent"
   | "identity"
+  | "household"
   | "membership"
   | "farm"
+  | "plot"
   | "boundary"
   | "holdings"
   | "enterprise"
+  | "cycle"
   | "sector"
   | "financial"
   | "evidence-review"
@@ -20,6 +23,10 @@ export type CollectionSessionState = {
   pendingEnterpriseIds?: string[];
   currentEnterpriseId?: string;
   currentSector?: string;
+  currentPlotId?: string;
+  currentCycleId?: string;
+  visitId?: string;
+  visitPurpose?: string;
   route?: string;
 };
 
@@ -28,6 +35,8 @@ export async function upsertCollectionSession(
   input: {
     farmerId: string;
     farmId?: string | null;
+    plotId?: string | null;
+    visitId?: string | null;
     currentStep: CollectionStep;
     stepStates?: CollectionSessionState;
   },
@@ -41,6 +50,8 @@ export async function upsertCollectionSession(
       .update(collectionSessions)
       .set({
         farmId: input.farmId ?? existing.farmId,
+        plotId: input.plotId ?? existing.plotId,
+        visitId: input.visitId ?? existing.visitId,
         currentStep: input.currentStep,
         stepStates,
         status: "LOCAL_DRAFT",
@@ -55,6 +66,8 @@ export async function upsertCollectionSession(
     id,
     farmerId: input.farmerId,
     farmId: input.farmId ?? null,
+    plotId: input.plotId ?? null,
+    visitId: input.visitId ?? null,
     currentStep: input.currentStep,
     stepStates,
     status: "LOCAL_DRAFT",
@@ -97,6 +110,7 @@ export function parseSessionStates(raw: string | null | undefined): CollectionSe
 export function resumePathForSession(session: typeof collectionSessions.$inferSelect): { pathname: string; params: Record<string, string> } {
   const farmerId = session.farmerId ?? "";
   const farmId = session.farmId ?? "";
+  const plotId = session.plotId ?? "";
   const states = parseStates(session.stepStates);
   const params: Record<string, string> = {};
 
@@ -105,6 +119,9 @@ export function resumePathForSession(session: typeof collectionSessions.$inferSe
   }
   if (farmId) {
     params.farmId = farmId;
+  }
+  if (plotId) {
+    params.plotId = plotId;
   }
   if (states.currentEnterpriseId) {
     params.enterpriseId = states.currentEnterpriseId;
@@ -116,10 +133,16 @@ export function resumePathForSession(session: typeof collectionSessions.$inferSe
   switch (session.currentStep) {
     case "identity":
       return { pathname: "/collect/identity", params };
+    case "household":
+      return { pathname: "/collect/household", params };
     case "membership":
       return { pathname: "/collect/membership", params };
     case "farm":
       return { pathname: "/collect/farm", params };
+    case "plot":
+      return { pathname: "/collect/plot", params };
+    case "cycle":
+      return { pathname: "/collect/cycle", params };
     case "boundary":
       return farmId ? { pathname: "/farms/[farmId]/boundary", params: { ...params, farmId } } : { pathname: "/collect/holdings", params };
     case "enterprise":

@@ -14,6 +14,7 @@ export default function ReviewStep() {
   const farmerId = params.farmerId ?? "";
   const [completeness, setCompleteness] = useState(0);
   const [missing, setMissing] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +27,7 @@ export default function ReviewStep() {
     void calculateCompletenessDetails(db, farmerId).then((details) => {
       setCompleteness(details.percent);
       setMissing(details.missing);
+      setWarnings(details.warnings);
     });
   }, [db, farmerId]);
 
@@ -40,10 +42,11 @@ export default function ReviewStep() {
 
     try {
       const details = await calculateCompletenessDetails(db, farmerId);
+      setCompleteness(details.percent);
+      setMissing(details.missing);
+      setWarnings(details.warnings);
       if (details.missing.length) {
-        setCompleteness(details.percent);
-        setMissing(details.missing);
-        setError("Resolve missing holdings before submitting. Every farm and enterprise must be complete.");
+        setError("Resolve required identity, farm pin, and enterprise items before submitting. Walked boundaries can wait.");
         return;
       }
       await updateCompleteness(db, farmerId, details.percent);
@@ -74,8 +77,9 @@ export default function ReviewStep() {
         <DataRow label="Backend validation" value="Pending sync" />
       </SectionCard>
 
-      <SectionCard title="Missing or weak items" description="Resolve these where possible before syncing. Some profiles may still be submitted for supervisor review.">
-        {missing.length ? missing.map((item) => <DataRow key={item} label={item} value="Missing" tone="warning" />) : <DataRow label="Required sections" value="Complete" tone="success" />}
+      <SectionCard title="Missing or weak items" description="Required items block submit. Walked farm boundaries are optional and can be finished last.">
+        {missing.length ? missing.map((item) => <DataRow key={item} label={item} value="Required" tone="warning" />) : <DataRow label="Required sections" value="Complete" tone="success" />}
+        {warnings.map((item) => <DataRow key={item} label={item} value="Optional" tone="warning" />)}
       </SectionCard>
 
       {submitted ? <Notice title="Saved and waiting to sync" message="The farmer profile is submitted locally. Use Sync Centre when a staging or production ingestion API is configured." tone="success" /> : null}

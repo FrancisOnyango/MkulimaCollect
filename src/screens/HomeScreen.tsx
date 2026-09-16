@@ -11,8 +11,8 @@ export default function HomeScreen({ isOffline, onNavigateSync, onCollect }: Hom
   const progress = Math.round((workSummary.doneToday / Math.max(workSummary.assignedToday, 1)) * 100)
 
   return (
-    <div className="flex-1 overflow-y-auto scroll-hidden energea-glow pb-28">
-      <header className="px-5 pt-8 pb-2 flex items-start justify-between gap-3">
+    <div className="flex-1 overflow-y-auto scroll-hidden energea-glow pb-4">
+      <header className="px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-brand">Field desk</p>
           <h1 className="text-[28px] font-semibold text-charcoal tracking-tight mt-1 leading-tight">{agent.name}</h1>

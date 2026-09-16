@@ -35,12 +35,13 @@ export default function App() {
   const showNav = screen.id === "main" || screen.id === "farmer-profile" || screen.id === "sync"
 
   return (
-    <div className="h-full bg-[#E2E4E3] flex justify-center">
+    <div className="h-[100dvh] max-h-[100dvh] bg-[#E2E4E3] flex justify-center">
       <div
         role="application"
         aria-label="MkulimaCollect"
-        className="relative w-full max-w-[430px] h-full bg-surface flex flex-col overflow-hidden border-x border-charcoal-100"
+        className="relative w-full max-w-[430px] h-full min-h-0 bg-surface flex flex-col overflow-hidden border-x border-charcoal-100"
       >
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {screen.id === "login" && (
           <LoginScreen onLogin={() => goMain("home")} />
         )}
@@ -59,7 +60,9 @@ export default function App() {
                 onSelectFarmer={id => setScreen({ id: "farmer-profile", farmerId: id })}
               />
             )}
-            {tab === "tasks" && <TasksScreen />}
+            {tab === "tasks" && (
+              <TasksScreen onSelectFarmer={id => setScreen({ id: "farmer-profile", farmerId: id })} />
+            )}
             {tab === "more" && (
               <MoreScreen
                 onSync={() => setScreen({ id: "sync" })}
@@ -105,13 +108,16 @@ export default function App() {
         {screen.id === "submit-success" && (
           <SubmitSuccessScreen onDone={() => goMain("farmers")} />
         )}
+        </div>
 
         {showNav && (
-          <BottomNav
-            activeTab={tab}
-            onTabChange={next => goMain(next)}
-            onCollect={() => setScreen({ id: "new-farmer" })}
-          />
+          <div className="shrink-0 bg-surface px-3 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            <BottomNav
+              activeTab={tab}
+              onTabChange={next => goMain(next)}
+              onCollect={() => setScreen({ id: "new-farmer" })}
+            />
+          </div>
         )}
       </div>
     </div>

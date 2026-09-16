@@ -388,14 +388,112 @@ const FOLLOW_ON_MIGRATIONS: { id: string; statements: string[] }[] = [
       "ALTER TABLE conflicts ADD COLUMN code TEXT",
     ],
   },
+  {
+    id: "0003_plots_visits_cycles",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS plots (
+        id TEXT PRIMARY KEY NOT NULL,
+        farmer_id TEXT NOT NULL REFERENCES farmers(id),
+        farm_id TEXT NOT NULL REFERENCES farms(id),
+        name TEXT NOT NULL,
+        unit_type TEXT NOT NULL,
+        area_ha REAL,
+        notes TEXT,
+        local_version INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        synced_at TEXT
+      )`,
+      "CREATE INDEX IF NOT EXISTS idx_plots_farm ON plots(farm_id)",
+      "CREATE INDEX IF NOT EXISTS idx_plots_farmer ON plots(farmer_id)",
+      `CREATE TABLE IF NOT EXISTS household_members (
+        id TEXT PRIMARY KEY NOT NULL,
+        farmer_id TEXT NOT NULL REFERENCES farmers(id),
+        full_name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        labour_contribution TEXT,
+        local_version INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        synced_at TEXT
+      )`,
+      "CREATE INDEX IF NOT EXISTS idx_household_members_farmer ON household_members(farmer_id)",
+      `CREATE TABLE IF NOT EXISTS visits (
+        id TEXT PRIMARY KEY NOT NULL,
+        farmer_id TEXT REFERENCES farmers(id),
+        agent_id TEXT NOT NULL,
+        purpose TEXT NOT NULL,
+        respondent_role TEXT,
+        interview_language TEXT NOT NULL DEFAULT 'en',
+        outcome TEXT NOT NULL DEFAULT 'partial',
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        next_visit_at TEXT,
+        gps_latitude REAL,
+        gps_longitude REAL,
+        gps_accuracy_m REAL,
+        notes TEXT,
+        local_version INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        synced_at TEXT
+      )`,
+      "CREATE INDEX IF NOT EXISTS idx_visits_farmer ON visits(farmer_id)",
+      "CREATE INDEX IF NOT EXISTS idx_visits_agent ON visits(agent_id)",
+      "CREATE INDEX IF NOT EXISTS idx_visits_purpose ON visits(purpose)",
+      "ALTER TABLE enterprises ADD COLUMN plot_id TEXT",
+      "CREATE INDEX IF NOT EXISTS idx_enterprises_plot ON enterprises(plot_id)",
+      "ALTER TABLE production_cycles ADD COLUMN cycle_type TEXT NOT NULL DEFAULT 'season'",
+      "ALTER TABLE production_cycles ADD COLUMN stage TEXT",
+      "ALTER TABLE evidence ADD COLUMN plot_id TEXT",
+      "ALTER TABLE evidence ADD COLUMN production_cycle_id TEXT",
+      "ALTER TABLE collection_sessions ADD COLUMN plot_id TEXT",
+      "ALTER TABLE collection_sessions ADD COLUMN visit_id TEXT",
+    ],
+  },
 ];
 
 export type AppDatabase = ExpoSQLiteDatabase<typeof schema>;
 
+let databasePromise: Promise<AppDatabase> | null = null;
+let writeChain: Promise<unknown> = Promise.resolve();
+
 export async function openAppDatabase(): Promise<AppDatabase> {
-  const sqlite = await SQLite.openDatabaseAsync("mkulimacollect.db");
-  await applyMigrations(sqlite);
-  return drizzle(sqlite, { schema });
+  if (!databasePromise) {
+    databasePromise = (async () => {
+      const sqlite = await SQLite.openDatabaseAsync("mkulimacollect.db");
+      await applyMigrations(sqlite);
+      return serializeTransactions(drizzle(sqlite, { schema }));
+    })();
+  }
+
+  return databasePromise;
+}
+
+function serializeTransactions(db: AppDatabase): AppDatabase {
+  const original = db.transaction.bind(db);
+
+  Object.defineProperty(db, "transaction", {
+    configurable: true,
+    value: async (work: Parameters<AppDatabase["transaction"]>[0], config?: Parameters<AppDatabase["transaction"]>[1]) => {
+      const run = writeChain.then(async () => {
+        try {
+          return await original(work, config);
+        } catch (caught) {
+          const message = caught instanceof Error ? caught.message : String(caught);
+          if (!/failed to run query ['"]begin['"]/i.test(message)) {
+            throw caught;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          return original(work, config);
+        }
+      });
+      writeChain = run.then(() => undefined, () => undefined);
+      return run;
+    },
+  });
+
+  return db;
 }
 
 export async function applyMigrations(sqlite: SQLite.SQLiteDatabase): Promise<void> {

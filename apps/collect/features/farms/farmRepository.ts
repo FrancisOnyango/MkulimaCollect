@@ -1,5 +1,5 @@
 import * as Crypto from "expo-crypto";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { AppDatabase } from "@/lib/db/database";
 import { farmGeometries, farmGeometryPoints, farms } from "@/lib/db/schema";
 import { enqueueOutboxEntry } from "@/features/sync/SyncOutbox";
@@ -161,4 +161,14 @@ export async function getFarmById(db: AppDatabase, farmId: string): Promise<type
 
 export async function getGeometriesByFarm(db: AppDatabase, farmId: string): Promise<(typeof farmGeometries.$inferSelect)[]> {
   return db.select().from(farmGeometries).where(eq(farmGeometries.farmId, farmId)).orderBy(desc(farmGeometries.capturedAt));
+}
+
+export async function getGeometriesByFarmer(db: AppDatabase, farmerId: string): Promise<(typeof farmGeometries.$inferSelect)[]> {
+  const farmRows = await getFarmsByFarmer(db, farmerId);
+  const farmIds = farmRows.map((farm) => farm.id);
+  if (!farmIds.length) {
+    return [];
+  }
+
+  return db.select().from(farmGeometries).where(inArray(farmGeometries.farmId, farmIds)).orderBy(desc(farmGeometries.capturedAt));
 }

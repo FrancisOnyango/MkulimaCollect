@@ -1,17 +1,25 @@
 import type { ReactNode } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "@/constants/colors";
 
 type FieldTone = "default" | "success" | "warning" | "danger";
 type ChoiceOption<T extends string> = T | { label: string; value: T };
 
 export function FormScreen({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const pad = width < 360 ? 14 : 18;
+
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <View style={[styles.screen, { paddingTop: Math.max(insets.top, 8) }]}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: pad, paddingBottom: footer ? 20 : Math.max(insets.bottom, 20) + 12 }]}
+        keyboardShouldPersistTaps="handled"
+      >
         {children}
       </ScrollView>
-      {footer ? <View style={styles.footer}>{footer}</View> : null}
+      {footer ? <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>{footer}</View> : null}
     </View>
   );
 }
@@ -29,13 +37,16 @@ export function StepHeader({
   step?: number;
   total?: number;
 }) {
+  const { width } = useWindowDimensions();
+  const compact = width < 380;
+
   return (
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <Text style={styles.eyebrow}>{eyebrow}</Text>
         {step && total ? <Text style={styles.stepPill}>Step {step}/{total}</Text> : null}
       </View>
-      <Text style={styles.title}>{title}</Text>
+      <Text style={[styles.title, compact ? styles.titleCompact : null]}>{title}</Text>
       <Text style={styles.description}>{description}</Text>
       {step && total ? (
         <View style={styles.progressTrack}>
@@ -211,9 +222,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 28,
+    paddingTop: 12,
   },
   footer: {
     backgroundColor: Colors.card,
@@ -253,10 +262,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#FFFFFF",
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "700",
-    lineHeight: 34,
+    lineHeight: 32,
     marginTop: 12,
+  },
+  titleCompact: {
+    fontSize: 22,
+    lineHeight: 28,
   },
   description: {
     color: "rgba(255,255,255,0.7)",

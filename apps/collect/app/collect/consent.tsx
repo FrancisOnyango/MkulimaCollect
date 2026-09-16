@@ -6,6 +6,7 @@ import { useAuth } from "@/features/auth/AuthProvider";
 import { saveConsent } from "@/features/farmers/consentRepository";
 import { createFarmer } from "@/features/farmers/farmerRepository";
 import { upsertCollectionSession } from "@/features/farmers/collectionSessionRepository";
+import { startVisit } from "@/features/visits/visitRepository";
 import { captureCurrentPosition } from "@/lib/deviceLocation";
 
 export default function ConsentStep() {
@@ -34,6 +35,14 @@ export default function ConsentStep() {
         status: "IN_PROGRESS",
       });
       const gps = await captureCurrentPosition().catch(() => null);
+      const { visitId } = await startVisit(db, {
+        farmerId,
+        agentId: agent.id,
+        purpose: "full_assessment",
+        gpsLatitude: gps?.latitude,
+        gpsLongitude: gps?.longitude,
+        gpsAccuracyM: gps?.accuracyM ?? undefined,
+      });
       const { operationUuid: consentOperationUuid } = await saveConsent(db, {
         farmerId,
         version: "1.0.0",
@@ -44,8 +53,11 @@ export default function ConsentStep() {
         gpsLongitude: gps?.longitude,
         gpsAccuracyM: gps?.accuracyM ?? undefined,
         itemsAgreed: [
+          "profile",
           "data_collection",
-          evidenceAuthorized ? "evidence_capture" : "evidence_declined",
+          evidenceAuthorized ? "media" : "evidence_declined",
+          evidenceAuthorized ? "farm_mapping" : "farm_mapping_declined",
+          mpesaAuthorized ? "financial_data" : "financial_data_declined",
           "offline_storage",
           "sync_to_mkulimascore",
         ],
@@ -53,7 +65,7 @@ export default function ConsentStep() {
         dependsOn: [farmerOperationUuid],
       });
 
-      await upsertCollectionSession(db, { farmerId, currentStep: "identity" });
+      await upsertCollectionSession(db, { farmerId, visitId, currentStep: "identity" });
       router.push({ pathname: "/collect/identity", params: { farmerId, dependsOn: consentOperationUuid } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save consent");

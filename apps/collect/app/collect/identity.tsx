@@ -44,8 +44,8 @@ export default function IdentityStep() {
         dependsOn,
       });
 
-      await upsertCollectionSession(db, { farmerId, currentStep: "membership" });
-      router.push({ pathname: "/collect/membership", params: { farmerId, dependsOn: operationUuid } });
+      await upsertCollectionSession(db, { farmerId, currentStep: "household" });
+      router.push({ pathname: "/collect/household", params: { farmerId, dependsOn: operationUuid } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to save identity");
     } finally {
@@ -54,7 +54,7 @@ export default function IdentityStep() {
   }
 
   return (
-    <FormScreen footer={<PrimaryButton label="Continue to membership" loading={saving} onPress={handleContinue} />}>
+    <FormScreen footer={<PrimaryButton label="Continue to household" loading={saving} onPress={handleContinue} />}>
       <StepHeader
         eyebrow="Farmer profile"
         title="Identity details"

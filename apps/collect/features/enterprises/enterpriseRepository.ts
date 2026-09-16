@@ -8,6 +8,7 @@ import { enqueueOutboxEntry } from "@/features/sync/SyncOutbox";
 export type CreateEnterpriseInput = {
   farmerId: string;
   farmId: string;
+  plotId?: string;
   sector: SectorIdValue;
   dependsOn?: string[];
 };
@@ -22,6 +23,7 @@ export async function createEnterprise(db: AppDatabase, input: CreateEnterpriseI
       id: enterpriseId,
       farmerId: input.farmerId,
       farmId: input.farmId,
+      plotId: input.plotId ?? null,
       sector: input.sector,
       status: "DRAFT",
       localVersion: 1,
@@ -38,6 +40,7 @@ export async function createEnterprise(db: AppDatabase, input: CreateEnterpriseI
         enterpriseLocalUuid: enterpriseId,
         farmerLocalUuid: input.farmerId,
         farmLocalUuid: input.farmId,
+        plotLocalUuid: input.plotId ?? null,
         sector: input.sector,
       },
       dependsOn: input.dependsOn ?? [],
@@ -100,6 +103,10 @@ export async function getEnterprisesByFarmer(db: AppDatabase, farmerId: string):
 
 export async function getEnterprisesByFarm(db: AppDatabase, farmId: string): Promise<(typeof enterprises.$inferSelect)[]> {
   return db.select().from(enterprises).where(eq(enterprises.farmId, farmId));
+}
+
+export async function getEnterprisesByPlot(db: AppDatabase, plotId: string): Promise<(typeof enterprises.$inferSelect)[]> {
+  return db.select().from(enterprises).where(eq(enterprises.plotId, plotId));
 }
 
 export async function getEnterpriseById(db: AppDatabase, enterpriseId: string): Promise<typeof enterprises.$inferSelect | null> {

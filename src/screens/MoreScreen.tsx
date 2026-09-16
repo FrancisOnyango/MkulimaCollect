@@ -11,7 +11,7 @@ interface MoreScreenProps {
 
 export default function MoreScreen({ onSync, isOffline, onToggleOffline, onSignOut }: MoreScreenProps) {
   return (
-    <div className="flex-1 overflow-y-auto scroll-hidden bg-surface pb-28">
+    <div className="flex-1 overflow-y-auto scroll-hidden bg-surface pb-4">
       <ScreenHeader
         title={agent.name}
         subtitle={`${agent.role} · ${agent.cluster}`}

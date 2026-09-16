@@ -1,3 +1,5 @@
+import { generatedWebSectors } from "./generatedWebSectors"
+
 export type WebField = {
   id: string
   label: string
@@ -9,11 +11,13 @@ export type WebField = {
 export type WebSector = {
   id: string
   label: string
+  group?: string
+  status?: "priority" | "standard"
   evidence: string[]
   sections: { title: string; fields: WebField[] }[]
 }
 
-export const webSectors: WebSector[] = [
+const handmadeWebSectors: WebSector[] = [
   {
     id: "dairy",
     label: "Dairy",
@@ -376,6 +380,62 @@ export const webSectors: WebSector[] = [
     ],
   },
 ]
+
+export const webSectors: WebSector[] = [...handmadeWebSectors, ...(generatedWebSectors as WebSector[])]
+
+export const webSectorGroups = ["Annual crops", "Horticulture", "Perennial crops", "Livestock", "Aquaculture"] as const
+
+const handmadeGroups: Record<string, string> = {
+  dairy: "Livestock",
+  maize: "Annual crops",
+  rice: "Annual crops",
+  "irish-potato": "Annual crops",
+  beans: "Annual crops",
+  tomato: "Horticulture",
+  horticulture: "Horticulture",
+  tea: "Perennial crops",
+  coffee: "Perennial crops",
+  avocado: "Perennial crops",
+  macadamia: "Perennial crops",
+  poultry: "Livestock",
+  "livestock-meat": "Livestock",
+  aquaculture: "Aquaculture",
+}
+
+export function getWebSectorGroup(sector: WebSector) {
+  return sector.group || handmadeGroups[sector.id] || "Annual crops"
+}
+
+export function getWebSectorsByGroup(group: string) {
+  return webSectors
+    .filter(sector => getWebSectorGroup(sector) === group)
+    .slice()
+    .sort((left, right) => {
+      const leftPriority = (left.status || handmadePriority[left.id] || "standard") === "priority"
+      const rightPriority = (right.status || handmadePriority[right.id] || "standard") === "priority"
+      if (leftPriority !== rightPriority) return leftPriority ? -1 : 1
+      return left.label.localeCompare(right.label)
+    })
+}
+
+const handmadePriority: Record<string, "priority" | "standard"> = {
+  dairy: "priority",
+  maize: "priority",
+  rice: "priority",
+  "irish-potato": "priority",
+  beans: "priority",
+  tomato: "priority",
+  tea: "priority",
+  coffee: "priority",
+  avocado: "priority",
+  macadamia: "priority",
+  poultry: "priority",
+  aquaculture: "priority",
+}
+
+export function isPriorityWebSector(sector: WebSector) {
+  return (sector.status || handmadePriority[sector.id] || "standard") === "priority"
+}
 
 export function getWebSector(idOrLabel: string) {
   const needle = idOrLabel.toLowerCase()

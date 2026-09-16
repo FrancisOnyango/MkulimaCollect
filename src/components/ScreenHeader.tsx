@@ -7,7 +7,7 @@ interface ScreenHeaderProps {
 
 export default function ScreenHeader({ title, subtitle, onBack, trailing }: ScreenHeaderProps) {
   return (
-    <header className="px-5 pt-8 pb-4">
+    <header className="px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">
           {onBack && (

@@ -66,7 +66,7 @@ export default function FarmStep() {
     }
 
     if (!pin || !isGpsAccurate(pin.accuracyM)) {
-      setError("Capture a farm GPS pin with 15 m accuracy or better before walking the boundary.");
+      setError("Capture a farm GPS pin with 15 m accuracy or better before saving this farm.");
       return;
     }
 
@@ -95,25 +95,26 @@ export default function FarmStep() {
         ...(Number.isFinite(parsedSize) && size.trim() ? { sizeReportedAcres: parsedSize, sizeReportedSource: "FARMER_REPORTED" } : {}),
         dependsOn,
       });
-      await upsertCollectionSession(db, { farmerId, farmId, currentStep: "boundary" });
+      await upsertCollectionSession(db, { farmerId, farmId, currentStep: "plot" });
 
-      router.push({
-        pathname: "/farms/[farmId]/boundary",
-        params: { farmId, farmerId, dependsOn: operationUuid },
+      router.replace({
+        pathname: "/collect/plot",
+        params: { farmerId, farmId, dependsOn: operationUuid },
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to save farm");
+      const message = caught instanceof Error ? caught.message : "Failed to save farm";
+      setError(/failed to run query ['"]begin['"]/i.test(message) ? "Storage was busy. Tap save again." : message);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <FormScreen footer={<PrimaryButton label="Save farm and walk boundary" loading={saving} onPress={handleContinue} />}>
+    <FormScreen footer={<PrimaryButton label="Save farm and add a plot" loading={saving} onPress={handleContinue} />}>
       <StepHeader
         eyebrow="Farm profile"
         title={existingCount ? `Add farm ${existingCount + 1}` : "Land and GPS"}
-        description="A farmer can have more than one farm. Save this holding with a GPS pin, then walk its boundary."
+        description="A farmer can have more than one farm. Save this holding with a GPS pin, then add its plots. Walk the boundary later from the holdings list if you need to keep moving."
         step={4}
         total={9}
       />
@@ -129,7 +130,7 @@ export default function FarmStep() {
         <TextField label="Ward or sub-location" value={ward} onChangeText={setWard} placeholder="Optional" />
         <TextField label="Sub-county" value={subCounty} onChangeText={setSubCounty} placeholder="Optional" />
         <TextField label="County" value={county} onChangeText={setCounty} placeholder="Optional" />
-        <TextField label="Reported size" value={size} onChangeText={setSize} keyboardType="decimal-pad" placeholder="Acres" helper="Farmer-reported acreage. GPS measured area is calculated on the next screen." />
+        <TextField label="Reported size" value={size} onChangeText={setSize} keyboardType="decimal-pad" placeholder="Acres" helper="Farmer-reported acreage. GPS measured area is optional and can be walked later." />
       </SectionCard>
 
       <SectionCard title="Farm GPS pin" description="Stand at the farm centre or homestead and capture the current position.">

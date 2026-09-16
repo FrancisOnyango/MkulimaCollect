@@ -58,7 +58,7 @@ export default function FarmersScreen({ onSelectFarmer }: FarmersScreenProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto scroll-hidden px-4 py-3 pb-28 flex flex-col gap-2">
+      <div className="flex-1 overflow-y-auto scroll-hidden px-4 py-3 pb-4 flex flex-col gap-2">
         {filtered.length === 0 && (
           <p className="text-center py-16 text-sm text-charcoal-400">No farmers match this search.</p>
         )}

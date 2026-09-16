@@ -13,7 +13,12 @@ export default function LocationStep() {
     router.push({ pathname: "/collect/farm", params });
   }
 
-  function handleBack() {
+  function handleSkip() {
+    if (params.farmerId) {
+      router.replace({ pathname: "/collect/holdings", params: { farmerId: params.farmerId, farmId: params.farmId, dependsOn: params.dependsOn } });
+      return;
+    }
+
     router.back();
   }
 
@@ -21,7 +26,7 @@ export default function LocationStep() {
     <FormScreen
       footer={
         <FooterActions
-          secondary={<SecondaryButton label="Back" onPress={handleBack} />}
+          secondary={<SecondaryButton label="Skip for now" onPress={handleSkip} />}
           primary={<PrimaryButton label={params.farmId ? "Capture boundary" : "Complete farm profile"} onPress={handleBoundaryCapture} />}
         />
       }
@@ -29,7 +34,7 @@ export default function LocationStep() {
       <StepHeader
         eyebrow="Geospatial checkpoint"
         title="Farm location assurance"
-        description="The farm GPS pin is captured on the farm step. This screen opens the walked-boundary tool."
+        description="The farm GPS pin is captured on the farm step. Walking the polygon is optional and can be finished last."
         step={5}
         total={9}
       />

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
+import { AppHeader, ScreenShell } from "@/components/ui/ScreenShell";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { useApiClient } from "@/components/providers/APIProvider";
 import { getRecentSyncAttempts } from "@/features/sync/syncAttemptRepository";
@@ -28,9 +29,9 @@ export default function SyncScreen() {
   }, [db, lastRun]);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: Colors.surface }} contentContainerStyle={{ padding: 24 }}>
-      <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>Sync Centre</Text>
-      <Text style={{ color: Colors.charcoal500, marginTop: 8 }}>Durable outbox status from local SQLite.</Text>
+    <ScreenShell padded={false}>
+    <ScrollView style={{ flex: 1, backgroundColor: Colors.surface }} contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 28 }}>
+      <AppHeader title="Sync Centre" subtitle="Durable outbox status from local SQLite." onBack={() => router.back()} />
       <View style={{ backgroundColor: environment === "development" ? Colors.amberBg : Colors.brandMuted, borderRadius: 12, padding: 12, marginTop: 14 }}>
         <Text style={{ color: environment === "development" ? Colors.amberField : Colors.brandDark, fontWeight: "700" }}>
           {environment === "development" ? "Local mock adapter" : environment === "preview" ? "Staging API" : "Production API"}
@@ -83,5 +84,6 @@ export default function SyncScreen() {
         )) : <Text style={{ color: Colors.charcoal500, marginTop: 8 }}>No sync attempts yet.</Text>}
       </View>
     </ScrollView>
+    </ScreenShell>
   );
 }

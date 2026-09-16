@@ -3,6 +3,7 @@ import * as Location from "expo-location";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
+import { ScreenShell } from "@/components/ui/ScreenShell";
 import { useDatabase } from "@/components/providers/DBProvider";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { upsertCollectionSession } from "@/features/farmers/collectionSessionRepository";
@@ -129,17 +130,29 @@ export default function FarmBoundaryScreen() {
 
       router.replace({ pathname: "/farms/[farmId]", params: { farmId } });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to save boundary");
+      const message = caught instanceof Error ? caught.message : "Failed to save boundary";
+      setError(/failed to run query ['"]begin['"]/i.test(message) ? "Storage was busy. Tap complete again, or skip and finish the polygon later." : message);
     } finally {
       setSaving(false);
     }
   }
 
+  async function skipForNow() {
+    if (farmerId) {
+      await upsertCollectionSession(db, { farmerId, farmId, currentStep: "holdings" });
+      router.replace({ pathname: "/collect/holdings", params: { farmerId, farmId, dependsOn } });
+      return;
+    }
+
+    router.back();
+  }
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: Colors.surface }} contentContainerStyle={{ padding: 18 }}>
+    <ScreenShell padded={false}>
+    <ScrollView style={{ flex: 1, backgroundColor: Colors.surface }} contentContainerStyle={{ padding: 18, paddingBottom: 28 }}>
       <Text style={{ color: Colors.brand, fontSize: 28, fontWeight: "700" }}>Walk boundary</Text>
       <Text style={{ color: Colors.charcoal500, marginTop: 8 }}>
-        Capture GPS points around the farm. This works without map tiles; the path is persisted locally when completed.
+        Capture GPS points around the farm when you have time. This is optional — skip and add enterprises now, then finish the polygon last.
       </Text>
 
       <View style={mapFallbackStyle}>
@@ -158,6 +171,9 @@ export default function FarmBoundaryScreen() {
 
       {error ? <Text style={{ color: Colors.redField, marginTop: 14 }}>{error}</Text> : null}
 
+      <Pressable accessibilityRole="button" disabled={saving} onPress={skipForNow} style={buttonStyle(saving, Colors.charcoal700)}>
+        <Text style={buttonTextStyle}>Skip for now</Text>
+      </Pressable>
       <Pressable accessibilityRole="button" disabled={capturing || saving} onPress={capturePoint} style={buttonStyle(capturing || saving, Colors.brand)}>
         {capturing ? <ActivityIndicator color="white" /> : <Text style={buttonTextStyle}>Capture current position</Text>}
       </Pressable>
@@ -168,6 +184,7 @@ export default function FarmBoundaryScreen() {
         {saving ? <ActivityIndicator color="white" /> : <Text style={buttonTextStyle}>Complete boundary</Text>}
       </Pressable>
     </ScrollView>
+    </ScreenShell>
   );
 }
 

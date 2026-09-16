@@ -35,6 +35,15 @@ def test_geo_bodies_read_collect_gps_fields():
     assert locations[0]["longitude"] == 36.8
 
 
+def test_geo_bodies_read_boundary_points():
+    farm = SimpleNamespace(
+        payload={"points": [{"lat": -1.29, "lng": 36.82, "accuracy": 8}]},
+    )
+    locations = geo_bodies(_farmer(), [farm])
+    assert locations[0]["latitude"] == -1.29
+    assert locations[0]["longitude"] == 36.82
+
+
 def test_score_bodies_keep_chain_specific_payload():
     enterprise = SimpleNamespace(id="ent-1", sector_id="dairy", payload={"sector": "dairy"})
     record = SimpleNamespace(
@@ -49,6 +58,19 @@ def test_score_bodies_keep_chain_specific_payload():
     assert bodies[0]["sector"] == "dairy"
     assert bodies[0]["sector_payload"]["milkLitresYesterday"] == 12
     assert "expectedHarvest" not in bodies[0]["sector_payload"]
+
+
+def test_forward_canonical_skips_without_auth():
+    with patch("app.platform.settings") as settings:
+        settings.platform_api_url = "https://api.mkulimascore.com"
+        settings.platform_api_token = ""
+        settings.platform_api_username = ""
+        settings.platform_api_password = ""
+        settings.platform_client_id = ""
+        settings.platform_client_secret = ""
+        detail = forward_canonical(MagicMock(), "MS-FMR-1", score=True)
+    assert detail["forwarded"] is False
+    assert detail["error"] == "platform_api_auth_not_configured"
 
 
 def test_forward_canonical_posts_farmer_identity_geo_and_score():

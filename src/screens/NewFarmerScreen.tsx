@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react"
 import { clearAllFarmBoundaries } from "../farmBoundary"
-import { emptyFarm, farmLinks, farmsFromDraft, persistFarms, readDraftValues, type DraftFarm } from "../farmerHoldings"
+import { emptyFarm, emptyPlot, farmLinks, farmsFromDraft, mergeDraftFarms, persistFarms, readDraftValues, type DraftFarm } from "../farmerHoldings"
 import { isGpsAccurate, MAX_GPS_ACCURACY_M } from "../gpsAccuracy"
 import { hashIdentifier, lastDigits } from "../pii"
-import { getWebSector, webSectors } from "../sectors"
+import { getWebSector, getWebSectorsByGroup, isPriorityWebSector, webSectorGroups } from "../sectors"
 
 interface NewFarmerScreenProps {
   onBack: () => void
@@ -14,9 +14,11 @@ interface NewFarmerScreenProps {
 const STEPS = [
   "Consent",
   "Identity",
+  "Household",
   "Location",
   "Membership",
   "Farms",
+  "Plots",
   "Enterprises",
   "Sector details",
   "Financial",
@@ -64,24 +66,60 @@ export default function NewFarmerScreen({ onBack, onGpsMap, onComplete }: NewFar
 
   const persistDraft = async (partial?: Record<string, unknown>) => {
     try {
-      const cur = { ...defaultDraft.current }
       if (partial) {
-        cur.values = { ...cur.values, ...partial }
+        defaultDraft.current = {
+          ...defaultDraft.current,
+          values: { ...defaultDraft.current.values, ...partial },
+        }
       }
-      if (typeof cur.values.idNumber === "string" && cur.values.idNumber.trim()) {
-        cur.values.nationalIdHash = await hashIdentifier(cur.values.idNumber, "national-id")
-        cur.values.nationalIdLast3 = lastDigits(cur.values.idNumber, 3)
-        delete cur.values.idNumber
+
+      const pendingId = defaultDraft.current.values?.idNumber
+      const pendingPhone = defaultDraft.current.values?.primaryPhone
+      const hashed: Record<string, unknown> = {}
+      if (typeof pendingId === "string" && pendingId.trim() && !defaultDraft.current.values?.nationalIdHash) {
+        hashed.nationalIdHash = await hashIdentifier(pendingId, "national-id")
+        hashed.nationalIdLast3 = lastDigits(pendingId, 3)
       }
-      if (typeof cur.values.primaryPhone === "string" && cur.values.primaryPhone.trim()) {
-        cur.values.primaryPhoneHash = await hashIdentifier(cur.values.primaryPhone, "phone")
-        cur.values.primaryPhoneLast4 = lastDigits(cur.values.primaryPhone, 4)
+      if (typeof pendingPhone === "string" && pendingPhone.trim() && !defaultDraft.current.values?.primaryPhoneHash) {
+        hashed.primaryPhoneHash = await hashIdentifier(pendingPhone, "phone")
+        hashed.primaryPhoneLast4 = lastDigits(pendingPhone, 4)
       }
-      cur.step = step
-      cur.updatedAt = new Date().toISOString()
-      defaultDraft.current = cur
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(cur))
-      setDraftSavedAt(cur.updatedAt)
+
+      // Drop stale writes after GPS map unmounts so pin/boundary are not overwritten.
+      if (!mounted.current) return
+
+      let diskValues: Record<string, unknown> = {}
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY)
+        const disk = raw ? JSON.parse(raw) : null
+        if (disk?.values && typeof disk.values === "object") {
+          diskValues = disk.values as Record<string, unknown>
+        }
+      } catch {
+        // ignore parse errors
+      }
+
+      const values = {
+        ...diskValues,
+        ...defaultDraft.current.values,
+        ...hashed,
+        farms: mergeDraftFarms(defaultDraft.current.values?.farms, diskValues.farms),
+      }
+      if (diskValues.activeFarmId && !values.activeFarmId) {
+        values.activeFarmId = diskValues.activeFarmId
+      }
+      if (typeof pendingId === "string" && pendingId.trim() && values.idNumber === pendingId) {
+        delete values.idNumber
+      }
+
+      defaultDraft.current = {
+        ...defaultDraft.current,
+        values,
+        step,
+        updatedAt: new Date().toISOString(),
+      }
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(defaultDraft.current))
+      setDraftSavedAt(defaultDraft.current.updatedAt)
       setHasDraft(true)
     } catch {
       // ignore storage errors (private mode, quota)
@@ -209,13 +247,15 @@ export default function NewFarmerScreen({ onBack, onGpsMap, onComplete }: NewFar
       <div className="flex-1 overflow-y-auto scroll-hidden">
         {step === 0 && <ConsentStep />}
         {step === 1 && <IdentityStep registerValidator={registerValidator} />}
-        {step === 2 && <LocationStep />}
-        {step === 3 && <MembershipStep />}
-        {step === 4 && <FarmStep onMapFarm={farmId => { saveDraft(); onGpsMap(farmId) }} registerValidator={registerValidator} />}
-        {step === 5 && <EnterpriseStep registerValidator={registerValidator} />}
-        {step === 6 && <SectorDetailsStep registerValidator={registerValidator} />}
-        {step === 7 && <FinancialStep />}
-        {step === 8 && <ReviewStep onEdit={(s) => setStep(s)} />}
+        {step === 2 && <HouseholdStep />}
+        {step === 3 && <LocationStep />}
+        {step === 4 && <MembershipStep />}
+        {step === 5 && <FarmStep onMapFarm={farmId => { saveDraft(); onGpsMap(farmId) }} registerValidator={registerValidator} />}
+        {step === 6 && <PlotStep registerValidator={registerValidator} />}
+        {step === 7 && <EnterpriseStep registerValidator={registerValidator} />}
+        {step === 8 && <SectorDetailsStep registerValidator={registerValidator} />}
+        {step === 9 && <FinancialStep />}
+        {step === 10 && <ReviewStep onEdit={(s) => setStep(s)} />}
       </div>
 
       {/* Bottom actions */}
@@ -350,6 +390,39 @@ function ConsentCapture() {
         </svg>
         Photograph signed consent
       </button>
+    </div>
+  )
+}
+
+function HouseholdStep() {
+  const [members, setMembers] = useState<{ name: string; role: string }[]>(() => {
+    const stored = readDraftValues().householdMembers
+    return Array.isArray(stored) ? stored as { name: string; role: string }[] : []
+  })
+  const [name, setName] = useState("")
+  const [role, setRole] = useState("spouse")
+
+  function addMember() {
+    if (!name.trim()) return
+    const next = [...members, { name: name.trim(), role }]
+    setMembers(next)
+    persistDraft("householdMembers", next)
+    setName("")
+  }
+
+  return (
+    <div className="px-5 py-5 flex flex-col gap-4 pb-4">
+      <p className="text-sm text-charcoal-500">Capture household members, roles, and labour. You can continue with only the farmer.</p>
+      <div className="bg-card border border-charcoal-100 rounded-2xl p-4 flex flex-col gap-3">
+        <input value={name} onChange={event => setName(event.target.value)} placeholder="Full name" className="rounded-xl border border-charcoal-100 px-3 py-3 text-sm" />
+        <select value={role} onChange={event => setRole(event.target.value)} className="rounded-xl border border-charcoal-100 px-3 py-3 text-sm">
+          {["farmer", "spouse", "dependant", "worker", "other"].map(item => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <button type="button" onClick={addMember} className="py-3 rounded-full bg-brand text-brand-ink text-sm font-semibold">Save member</button>
+      </div>
+      {members.map((member, index) => (
+        <p key={`${member.name}-${index}`} className="text-sm text-charcoal bg-card border border-charcoal-100 rounded-xl px-4 py-3">{member.name} · {member.role}</p>
+      ))}
     </div>
   )
 }
@@ -578,10 +651,10 @@ function FarmStep({ onMapFarm, registerValidator }: { onMapFarm: (farmId: string
   }
 
   if (registerValidator) {
-    registerValidator(4, () => {
-      const latest = farmsFromDraft()
-      if (!latest.length || latest.some(farm => !farm.name.trim() || !farm.pin || !farm.boundary)) {
-        setError("Each farm needs a name, GPS pin, and walked boundary.")
+    registerValidator(5, () => {
+      persistFarms(farms, activeFarmId)
+      if (!farms.length || farms.some(farm => !farm.name.trim() || !farm.pin)) {
+        setError("Each farm needs a name and GPS pin. Walked boundaries can be mapped later.")
         return false
       }
       setError(null)
@@ -697,7 +770,7 @@ function FarmStep({ onMapFarm, registerValidator }: { onMapFarm: (farmId: string
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
             active.boundary ? "text-brand bg-brand-light" : "text-amber-field bg-amber-bg"
           }`}>
-            {active.boundary ? `${active.boundary.acres} acres mapped` : "Not yet mapped"}
+            {active.boundary ? `${active.boundary.acres} acres mapped` : "Optional — walk later"}
           </span>
         </div>
         <button
@@ -705,7 +778,7 @@ function FarmStep({ onMapFarm, registerValidator }: { onMapFarm: (farmId: string
           onClick={() => { persistFarms(farms, active.id); onMapFarm(active.id) }}
           className="w-full py-3 bg-brand text-brand-ink rounded-xl text-sm font-semibold"
         >
-          {active.boundary ? "Remap this farm" : "Map this farm boundary"}
+          {active.boundary ? "Remap this farm" : "Walk boundary (optional)"}
         </button>
         {error && <p className="text-xs text-red-field mt-2">{error}</p>}
       </div>
@@ -718,46 +791,119 @@ function persistDraft(key: string, value: unknown) {
   w.__mk_updateDraft?.(key, value)
 }
 
-function EnterpriseStep({ registerValidator }: { registerValidator?: (stepIndex: number, fn: () => boolean) => void }) {
+function PlotStep({ registerValidator }: { registerValidator?: (stepIndex: number, fn: () => boolean) => void }) {
   const [farms, setFarms] = useState<DraftFarm[]>(() => farmsFromDraft())
 
-  const toggle = (farmId: string, sectorId: string) => {
+  function updatePlot(farmId: string, plotId: string, patch: Partial<{ name: string; unitType: string }>) {
     const next = farms.map(farm => {
       if (farm.id !== farmId) return farm
-      const enterprises = farm.enterprises.includes(sectorId)
-        ? farm.enterprises.filter(id => id !== sectorId)
-        : [...farm.enterprises, sectorId]
-      return { ...farm, enterprises }
+      const plots = (farm.plots?.length ? farm.plots : [emptyPlot(0)]).map(plot => plot.id === plotId ? { ...plot, ...patch } : plot)
+      return { ...farm, plots }
+    })
+    setFarms(next)
+    persistFarms(next)
+  }
+
+  function addPlot(farmId: string) {
+    const next = farms.map(farm => {
+      if (farm.id !== farmId) return farm
+      const plots = [...(farm.plots?.length ? farm.plots : [emptyPlot(0)]), emptyPlot(farm.plots?.length || 1)]
+      return { ...farm, plots }
     })
     setFarms(next)
     persistFarms(next)
   }
 
   if (registerValidator) {
-    registerValidator(5, () => farmLinks(farms).length > 0)
+    registerValidator(6, () => {
+      persistFarms(farms)
+      return farms.every(farm => (farm.plots?.length || 0) > 0 && farm.plots.every(plot => plot.name.trim()))
+    })
+  }
+
+  return (
+    <div className="px-5 py-5 flex flex-col gap-4 pb-4">
+      <p className="text-sm text-charcoal-500">A farm can have several plots: fields, greenhouses, ponds, houses, cages, tanks, or apiaries.</p>
+      {farms.map(farm => (
+        <div key={farm.id} className="bg-card border border-charcoal-100 rounded-2xl p-4">
+          <p className="text-sm font-semibold text-charcoal mb-3">{farm.name}</p>
+          {(farm.plots?.length ? farm.plots : [emptyPlot(0)]).map(plot => (
+            <div key={plot.id} className="mb-3 last:mb-0">
+              <input value={plot.name} onChange={event => updatePlot(farm.id, plot.id, { name: event.target.value })} className="w-full rounded-xl border border-charcoal-100 px-3 py-2 text-sm mb-2" />
+              <select value={plot.unitType} onChange={event => updatePlot(farm.id, plot.id, { unitType: event.target.value })} className="w-full rounded-xl border border-charcoal-100 px-3 py-2 text-sm">
+                {["open_field", "greenhouse", "orchard_block", "livestock_house", "pond", "cage", "tank", "apiary"].map(item => (
+                  <option key={item} value={item}>{item.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+          <button type="button" onClick={() => addPlot(farm.id)} className="mt-2 text-sm font-semibold text-brand">Add another plot</button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EnterpriseStep({ registerValidator }: { registerValidator?: (stepIndex: number, fn: () => boolean) => void }) {
+  const [farms, setFarms] = useState<DraftFarm[]>(() => farmsFromDraft())
+
+  const toggle = (farmId: string, plotId: string, sectorId: string) => {
+    const next = farms.map(farm => {
+      if (farm.id !== farmId) return farm
+      const plots = (farm.plots?.length ? farm.plots : [{ id: "main", name: "Main plot", unitType: "open_field", enterprises: farm.enterprises }]).map(plot => {
+        if (plot.id !== plotId) return plot
+        const enterprises = plot.enterprises.includes(sectorId)
+          ? plot.enterprises.filter(id => id !== sectorId)
+          : [...plot.enterprises, sectorId]
+        return { ...plot, enterprises }
+      })
+      return { ...farm, plots, enterprises: [...new Set(plots.flatMap(plot => plot.enterprises))] }
+    })
+    setFarms(next)
+    persistFarms(next)
+  }
+
+  if (registerValidator) {
+    registerValidator(7, () => {
+      persistFarms(farms)
+      return farmLinks(farms).length > 0
+    })
   }
 
   return (
     <div className="px-5 py-5 flex flex-col gap-5 pb-4">
-      <p className="text-sm text-charcoal-500">Each farm can run more than one enterprise. Select the value chains that belong on that holding.</p>
+      <p className="text-sm text-charcoal-500">Each plot can run more than one enterprise. Select the value chains that belong on that production unit.</p>
       {farms.map((farm, index) => (
         <div key={farm.id} className="bg-card border border-charcoal-100 rounded-2xl p-4">
           <p className="text-sm font-semibold text-charcoal mb-1">{farm.name || `Farm ${index + 1}`}</p>
-          <p className="text-xs text-charcoal-500 mb-3">{farm.enterprises.length === 1 ? "1 enterprise selected" : `${farm.enterprises.length} enterprises selected`}</p>
-          <div className="grid grid-cols-2 gap-2">
-            {webSectors.map(sector => (
-              <button
-                key={sector.id}
-                type="button"
-                onClick={() => toggle(farm.id, sector.id)}
-                className={`py-3 px-3 rounded-xl text-xs font-medium border text-left ${
-                  farm.enterprises.includes(sector.id) ? "bg-brand text-brand-ink border-brand" : "bg-card text-charcoal border-charcoal-200"
-                }`}
-              >
-                {sector.label}
-              </button>
-            ))}
-          </div>
+          {(farm.plots?.length ? farm.plots : [{ id: `${farm.id}-main`, name: "Main plot", unitType: "open_field", enterprises: farm.enterprises }]).map(plot => (
+            <div key={plot.id} className="mt-3">
+              <p className="text-xs font-semibold text-charcoal">{plot.name}</p>
+              <p className="text-xs text-charcoal-500 mb-2">{plot.unitType.replace(/_/g, " ")} · {plot.enterprises.length} enterprise{plot.enterprises.length === 1 ? "" : "s"}</p>
+              {webSectorGroups.map(group => (
+                <div key={`${plot.id}-${group}`} className="mb-3 last:mb-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-charcoal-500 mb-2">{group}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {getWebSectorsByGroup(group).map(sector => (
+                      <button
+                        key={sector.id}
+                        type="button"
+                        onClick={() => toggle(farm.id, plot.id, sector.id)}
+                        className={`py-3 px-3 rounded-xl text-xs font-medium border text-left ${
+                          plot.enterprises.includes(sector.id) ? "bg-brand text-brand-ink border-brand" : "bg-card text-charcoal border-charcoal-200"
+                        }`}
+                      >
+                        {sector.label}
+                        {isPriorityWebSector(sector) ? (
+                          <span className="block text-[10px] mt-1 opacity-70">Priority</span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       ))}
     </div>
@@ -780,7 +926,7 @@ function SectorDetailsStep({ registerValidator }: { registerValidator?: (stepInd
   const [error, setError] = useState<string | null>(null)
 
   if (registerValidator) {
-    registerValidator(6, () => {
+    registerValidator(8, () => {
       const values = readDraftValues()
       const storedEvidence = values.evidenceAttached && typeof values.evidenceAttached === "object"
         ? values.evidenceAttached as Record<string, string>
@@ -1018,9 +1164,11 @@ function ReviewStep({ onEdit }: { onEdit: (step: number) => void }) {
     const sector = getWebSector(sectorId)
     return sector.evidence.filter(item => !evidence[`${farm.id}:${sector.id}:${item}`]).map(item => `${farm.name} · ${sector.label}: ${item}`)
   })
-  const incompleteFarms = farms.filter(farm => !farm.pin || !farm.boundary)
+  const incompletePins = farms.filter(farm => !farm.pin)
+  const unmappedFarms = farms.filter(farm => farm.pin && !farm.boundary)
   const warnings = [
-    ...incompleteFarms.map(farm => `${farm.name} still needs a pin or boundary`),
+    ...incompletePins.map(farm => `${farm.name} still needs a GPS pin`),
+    ...unmappedFarms.map(farm => `${farm.name} boundary can be walked later`),
     links.length === 0 ? "No enterprises selected" : null,
     ...missingEvidence.map(item => `${item} not attached`),
   ].filter(Boolean) as string[]
@@ -1028,12 +1176,14 @@ function ReviewStep({ onEdit }: { onEdit: (step: number) => void }) {
   const sections = [
     { name: "Consent", step: 0, ok: true },
     { name: "Identity", step: 1, ok: Boolean(values.fullName || values.firstName) },
-    { name: "Location", step: 2, ok: true },
-    { name: "Membership", step: 3, ok: true },
-    { name: `${farms.length} farm${farms.length === 1 ? "" : "s"}`, step: 4, ok: incompleteFarms.length === 0 },
-    { name: `${links.length} enterprise${links.length === 1 ? "" : "s"}`, step: 5, ok: links.length > 0 },
-    { name: links.map(({ farm, sectorId }) => `${farm.name} · ${getWebSector(sectorId).label}`).join(", ") || "Sector details", step: 6, ok: missingEvidence.length === 0 },
-    { name: "Financial", step: 7, ok: Boolean(values.incomeFrequency || Object.keys(values).some(key => key.startsWith("income."))) },
+    { name: "Household", step: 2, ok: true },
+    { name: "Location", step: 3, ok: true },
+    { name: "Membership", step: 4, ok: true },
+    { name: `${farms.length} farm${farms.length === 1 ? "" : "s"}`, step: 5, ok: incompletePins.length === 0 },
+    { name: `${farms.reduce((sum, farm) => sum + (farm.plots?.length || 0), 0)} plot${farms.reduce((sum, farm) => sum + (farm.plots?.length || 0), 0) === 1 ? "" : "s"}`, step: 6, ok: farms.every(farm => (farm.plots?.length || 0) > 0) },
+    { name: `${links.length} enterprise${links.length === 1 ? "" : "s"}`, step: 7, ok: links.length > 0 },
+    { name: links.map(({ farm, sectorId }) => `${farm.name} · ${getWebSector(sectorId).label}`).join(", ") || "Sector details", step: 8, ok: missingEvidence.length === 0 },
+    { name: "Financial", step: 9, ok: Boolean(values.incomeFrequency || Object.keys(values).some(key => key.startsWith("income."))) },
   ]
 
   return (
@@ -1063,7 +1213,7 @@ function ReviewStep({ onEdit }: { onEdit: (step: number) => void }) {
             {farms.map(farm => (
               <li key={farm.id}>
                 <span className="font-medium">{farm.name}</span>
-                <span className="text-charcoal-500"> · {farm.enterprises.map(id => getWebSector(id).label).join(", ") || "no enterprises"}</span>
+                <span className="text-charcoal-500"> · {(farm.plots ?? []).map(plot => `${plot.name} (${plot.enterprises.map(id => getWebSector(id).label).join(", ") || "no enterprises"})`).join(" · ") || "no plots"}</span>
               </li>
             ))}
           </ul>

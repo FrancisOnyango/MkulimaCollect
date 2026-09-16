@@ -20,7 +20,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 energea-glow px-6 pt-16 pb-8">
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto energea-glow px-6 pt-[max(2rem,env(safe-area-inset-top))] pb-8">
       <div className="mb-10">
         <div className="w-11 h-11 rounded-2xl bg-brand flex items-center justify-center mb-6">
           <span className="text-brand-ink font-bold text-lg">M</span>

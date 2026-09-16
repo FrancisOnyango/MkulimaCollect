@@ -1,3 +1,4 @@
+import { generatedChainSchemas } from "./generatedChainSchemas";
 import type { SectorSchemaDefinition, SectorSection } from "./types";
 
 export const dairySchema: SectorSchemaDefinition = {
@@ -726,7 +727,7 @@ export const sectorSchemas: Record<string, SectorSchemaDefinition> = {
 };
 
 export function getSectorSchema(sector: string) {
-  return sectorSchemas[sector] ?? maizeSchema;
+  return sectorSchemas[sector] ?? generatedChainSchemas[sector] ?? maizeSchema;
 }
 
 function buildSchema(sector: string, title: string, sections: SectorSection[]): SectorSchemaDefinition {

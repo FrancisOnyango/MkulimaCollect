@@ -1,6 +1,7 @@
 import { SectorId, type SectorIdValue } from "@/constants/sectorIds";
+import { handmadeSectorSlugs, valueChains, type ValueChainGroup, type ValueChainStatus } from "./valueChainRegistry";
 
-export type SectorGroupId = "Annual crops" | "Horticulture" | "Perennial crops" | "Livestock";
+export type SectorGroupId = ValueChainGroup;
 
 export type SectorMeta = {
   id: SectorIdValue;
@@ -9,32 +10,109 @@ export type SectorMeta = {
   description: string;
   scorePath: string;
   evidenceCategories: string[];
+  status: ValueChainStatus;
+  code?: string;
 };
 
-export const sectorGroups: readonly SectorGroupId[] = ["Annual crops", "Horticulture", "Perennial crops", "Livestock"];
+const evidenceByGroup: Record<SectorGroupId, string[]> = {
+  "Annual crops": ["farm-photo", "input-receipt", "harvest-record", "buyer-delivery-note"],
+  Horticulture: ["farm-photo", "spray-record", "harvest-record", "buyer-delivery-note"],
+  "Perennial crops": ["farm-photo", "factory-delivery-slip", "payment-statement", "input-receipt"],
+  Livestock: ["animal-photo", "sales-record", "veterinary-record", "movement-permit"],
+  Aquaculture: ["pond-photo", "feed-receipt", "harvest-record", "sales-record"],
+};
 
-export const sectorCatalog: readonly SectorMeta[] = [
-  { id: SectorId.MAIZE, label: "Maize", group: "Annual crops", description: "Seasonal production, input use, storage, delivery, and buyer/payment signals.", scorePath: "Crop production score", evidenceCategories: ["farm-photo", "input-receipt", "harvest-record", "buyer-delivery-note"] },
-  { id: SectorId.RICE, label: "Rice", group: "Annual crops", description: "Paddy acreage, irrigation, yields, milling, sales, and payment traceability.", scorePath: "Crop production score", evidenceCategories: ["farm-photo", "irrigation-record", "harvest-record", "buyer-delivery-note"] },
-  { id: SectorId.IRISH_POTATO, label: "Irish potato", group: "Annual crops", description: "Planting, seed quality, yield, aggregation, cold-chain, and market access signals.", scorePath: "Crop production score", evidenceCategories: ["farm-photo", "seed-receipt", "harvest-record", "buyer-delivery-note"] },
-  { id: SectorId.BEANS, label: "Beans", group: "Annual crops", description: "Seasonal yields, input discipline, storage, collective marketing, and buyer records.", scorePath: "Crop production score", evidenceCategories: ["farm-photo", "input-receipt", "harvest-record", "sales-record"] },
-  { id: SectorId.TOMATO, label: "Tomato", group: "Horticulture", description: "Production cycles, irrigation, pest control, grading, perishability, and buyer terms.", scorePath: "Horticulture score", evidenceCategories: ["farm-photo", "spray-record", "harvest-record", "buyer-delivery-note"] },
-  { id: SectorId.HORTICULTURE, label: "Horticulture", group: "Horticulture", description: "Vegetable and fruit enterprise records for diversified horticulture farms.", scorePath: "Horticulture score", evidenceCategories: ["farm-photo", "input-receipt", "harvest-record", "sales-record"] },
-  { id: SectorId.TEA, label: "Tea", group: "Perennial crops", description: "Bush area, plucking cadence, factory deliveries, quality deductions, and payments.", scorePath: "Perennial crop score", evidenceCategories: ["farm-photo", "factory-delivery-slip", "payment-statement", "input-receipt"] },
-  { id: SectorId.COFFEE, label: "Coffee", group: "Perennial crops", description: "Tree count, cherry volumes, cooperative deliveries, payments, and quality history.", scorePath: "Perennial crop score", evidenceCategories: ["farm-photo", "factory-delivery-slip", "payment-statement", "certification-record"] },
-  { id: SectorId.AVOCADO, label: "Avocado", group: "Perennial crops", description: "Tree maturity, harvest volumes, exporter aggregation, certification, and payment records.", scorePath: "Perennial crop score", evidenceCategories: ["farm-photo", "exporter-delivery-note", "payment-statement", "certification-record"] },
-  { id: SectorId.MACADAMIA, label: "Macadamia", group: "Perennial crops", description: "Tree stand, nut volumes, processor deliveries, payment cycles, and quality signals.", scorePath: "Perennial crop score", evidenceCategories: ["farm-photo", "processor-delivery-note", "payment-statement", "certification-record"] },
-  { id: SectorId.DAIRY, label: "Dairy", group: "Livestock", description: "Herd, milk volumes, quality, animal health, feed, costs, deliveries, and payments.", scorePath: "Livestock production score", evidenceCategories: ["animal-photo", "milk-delivery-slip", "payment-statement", "veterinary-record"] },
-  { id: SectorId.POULTRY, label: "Poultry", group: "Livestock", description: "Flock size, cycles, egg/meat output, mortality, feed costs, and buyer records.", scorePath: "Livestock production score", evidenceCategories: ["flock-photo", "feed-receipt", "sales-record", "veterinary-record"] },
-  { id: SectorId.LIVESTOCK_MEAT, label: "Livestock meat", group: "Livestock", description: "Herd/flock holdings, finishing cycles, animal health, sales, and movement records.", scorePath: "Livestock production score", evidenceCategories: ["animal-photo", "sales-record", "veterinary-record", "movement-permit"] },
-  { id: SectorId.AQUACULTURE, label: "Aquaculture", group: "Livestock", description: "Pond capacity, stocking, feed conversion, harvests, water quality, and buyer records.", scorePath: "Aquaculture production score", evidenceCategories: ["pond-photo", "feed-receipt", "harvest-record", "sales-record"] },
+const handmadeEvidence: Partial<Record<SectorIdValue, string[]>> = {
+  [SectorId.DAIRY]: ["animal-photo", "milk-delivery-slip", "payment-statement", "veterinary-record"],
+  [SectorId.POULTRY]: ["flock-photo", "feed-receipt", "sales-record", "veterinary-record"],
+  [SectorId.TEA]: ["farm-photo", "factory-delivery-slip", "payment-statement", "input-receipt"],
+  [SectorId.COFFEE]: ["farm-photo", "factory-delivery-slip", "payment-statement", "certification-record"],
+  [SectorId.AVOCADO]: ["farm-photo", "exporter-delivery-note", "payment-statement", "certification-record"],
+  [SectorId.MACADAMIA]: ["farm-photo", "processor-delivery-note", "payment-statement", "certification-record"],
+  [SectorId.AQUACULTURE]: ["pond-photo", "feed-receipt", "harvest-record", "sales-record"],
+  [SectorId.TOMATO]: ["farm-photo", "spray-record", "harvest-record", "buyer-delivery-note"],
+  [SectorId.MAIZE]: ["farm-photo", "input-receipt", "harvest-record", "buyer-delivery-note"],
+  [SectorId.RICE]: ["farm-photo", "irrigation-record", "harvest-record", "buyer-delivery-note"],
+  [SectorId.IRISH_POTATO]: ["farm-photo", "seed-receipt", "harvest-record", "buyer-delivery-note"],
+  [SectorId.BEANS]: ["farm-photo", "input-receipt", "harvest-record", "sales-record"],
+};
+
+function toCamel(value: string) {
+  return value.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase()).replace(/-/g, "");
+}
+
+function uniqueEvidence(slug: string, categories: string[]) {
+  const prefix = toCamel(slug);
+  return categories.map((category) => {
+    const rest = toCamel(category);
+    return prefix + rest.charAt(0).toUpperCase() + rest.slice(1);
+  });
+}
+
+function evidenceFor(slug: string, group: SectorGroupId): string[] {
+  const handmade = handmadeEvidence[slug as SectorIdValue];
+  if (handmade) {
+    return handmade;
+  }
+  if (handmadeSectorSlugs.has(slug)) {
+    return evidenceByGroup[group];
+  }
+  if (slug === "apiculture") {
+    return uniqueEvidence(slug, ["hive-photo", "harvest-record", "sales-record", "inspection-record"]);
+  }
+  return uniqueEvidence(slug, evidenceByGroup[group]);
+}
+
+export const sectorGroups: readonly SectorGroupId[] = ["Annual crops", "Horticulture", "Perennial crops", "Livestock", "Aquaculture"];
+
+const registryCatalog: SectorMeta[] = valueChains.map((chain) => ({
+  id: chain.slug as SectorIdValue,
+  label: chain.label,
+  group: chain.group,
+  description: `${chain.subtypes}. Field cadence: ${chain.cadence}.`,
+  scorePath: chain.scorePath,
+  evidenceCategories: evidenceFor(chain.slug, chain.group),
+  status: chain.status,
+  code: chain.code,
+}));
+
+const aliasCatalog: SectorMeta[] = [
+  {
+    id: SectorId.LIVESTOCK_MEAT,
+    label: "Livestock meat",
+    group: "Livestock",
+    description: "Herd finishing, animal health, sales, and movement records. Use Beef cattle for the VC02 engine.",
+    scorePath: "Livestock production score",
+    evidenceCategories: ["animal-photo", "sales-record", "veterinary-record", "movement-permit"],
+    status: "standard",
+    code: "VC02",
+  },
+  {
+    id: SectorId.HORTICULTURE,
+    label: "Horticulture",
+    group: "Horticulture",
+    description: "Diversified vegetable and fruit enterprise when the crop is not one of the named horticulture chains.",
+    scorePath: "Horticulture score",
+    evidenceCategories: ["farm-photo", "input-receipt", "harvest-record", "sales-record"],
+    status: "standard",
+  },
 ];
+
+export const sectorCatalog: readonly SectorMeta[] = [...registryCatalog, ...aliasCatalog];
 
 export const defaultSectorGroup: SectorGroupId = "Annual crops";
 export const defaultSectorId = SectorId.MAIZE;
 
 export function getSectorsByGroup(group: SectorGroupId): SectorMeta[] {
-  return sectorCatalog.filter((sector) => sector.group === group);
+  return sectorCatalog
+    .filter((sector) => sector.group === group)
+    .slice()
+    .sort((left, right) => {
+      if (left.status !== right.status) {
+        return left.status === "priority" ? -1 : 1;
+      }
+      return left.label.localeCompare(right.label);
+    });
 }
 
 export function getSectorMeta(id: string): SectorMeta {
@@ -45,6 +123,7 @@ export function getSectorMeta(id: string): SectorMeta {
     description: "General agriculture enterprise record with production, market, cost, and evidence signals.",
     scorePath: "General agriculture score",
     evidenceCategories: ["farm-photo", "input-receipt", "harvest-record", "sales-record"],
+    status: "standard",
   };
 }
 
